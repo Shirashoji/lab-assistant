@@ -12,18 +12,20 @@
 | --- | --- |
 | `add-event` — URL(Discord / esa)から予定を抽出 → 重複チェック → カレンダー作成 | ✅ 動作 |
 | esa 検索 — 公式 MCP `@esaio/esa-mcp-server` を `.mcp.json` でバンドル | ✅ 動作 |
-| 横断検索(Calendar / Discord) — `scripts/bin/search.mjs` | ✅ 動作 |
-| Slack 連携 | 🚧 Phase 2(管理者承認が必要 — 下記) |
+| 横断検索(Calendar / Slack / Discord) — `scripts/bin/search.mjs` | ✅ 動作 |
 | `find-schedule` / `check-shared` / `find-channel` / `search-lab` スキル | 🚧 Phase 3(下書きが `skills/` にあります) |
 | Google Drive / GitHub | 🚧 Phase 4 |
 
 ## アーキテクチャ
 
-- **公式 MCP がある情報源**(esa、将来: Slack / GitHub / Drive)は、その MCP サーバーを
+- **公式 MCP がある情報源**(esa、将来: GitHub / Drive)は、その MCP サーバーを
   `.mcp.json` でバンドルする。Claude Code はプラグイン読み込み時に自動登録し、
   `plugin:lab-assistant:<server>` という名前で使えるようになる。
-- **公式 MCP が無い / 精密な制御が要る**もの(Discord 検索、ゼミカレンダーの予定操作)は
+- **公式 MCP が無い / 精密な制御が要る**もの(Discord 検索、Slack 検索、ゼミカレンダーの予定操作)は
   `scripts/` の依存ゼロ Node スクリプトで実装する。
+  - Slack は公式 MCP もあるが、接続に**ワークスペース管理者の承認**が要る。承認が下りない場合の
+    代替として、`search:read` だけを持つ最小アプリ([slack-app/](slack-app/))+ ユーザートークンで
+    `search.messages` を叩く方式にしている。
 - **スキル**が両者を順に呼び出して結果をまとめる。
 
 ## 使い方(現状)
@@ -75,6 +77,11 @@ cp .env.example .env
   `scripts/bin/esa-mcp.mjs` が `.env` からトークンを読んで渡すので、追加設定は不要です。
   初回起動時は `npx` が `@esaio/esa-mcp-server` を取得するため少し時間がかかります。
 
+### 3.5 Slack(任意 / 学科ワークスペースの検索用)
+
+[slack-app/README.md](slack-app/README.md) の手順で最小アプリをインストールし、
+**User OAuth Token(`xoxp-`)** を `.env` の `SLACK_USER_TOKEN` に入れる。未設定でも他機能は動く。
+
 ### 4. Google Calendar の OAuth(ゼミ用カレンダーを対象に)
 
 1. <https://console.cloud.google.com/> でプロジェクト作成 → **Google Calendar API** を有効化
@@ -101,8 +108,9 @@ node scripts/bin/check-setup.mjs
 | キー | 必須 | 説明 |
 | --- | --- | --- |
 | `DISCORD_BOT_TOKEN` | ✔ | Discord Bot トークン |
-| `ESA_ACCESS_TOKEN` | ✔ | esa Personal Access Token(read) |
+| `ESA_ACCESS_TOKEN` | ✔ | esa Personal Access Token(PAT v2 推奨)。add-event と esa MCP が使う |
 | `ESA_DEFAULT_TEAM` | — | URL からチーム名が取れない場合のフォールバック |
+| `SLACK_USER_TOKEN` | — | 学科 Slack 検索用の User OAuth Token(`xoxp-`)。[slack-app/](slack-app/) 参照 |
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | ✔ | OAuth クライアント |
 | `GOOGLE_REFRESH_TOKEN` | ✔ | `auth-google.mjs` で取得 |
 | `GOOGLE_CALENDAR_ID` | — | 対象カレンダー。**ゼミカレンダーの ID を推奨**。既定 `primary` |
@@ -124,57 +132,45 @@ Claude Code はプラグイン読み込み時に `plugin:lab-assistant:<server>`
 | サーバー | 実体 | 認証 |
 | --- | --- | --- |
 | `esa` | `@esaio/esa-mcp-server`(`scripts/bin/esa-mcp.mjs` 経由で `.env` のトークンを注入) | `.env` の `ESA_ACCESS_TOKEN` |
-| `slack` | (Phase 2)公式 `mcp.slack.com` — **ワークスペース管理者の承認が必要** | `/mcp` で OAuth |
 | `github` / `google-drive` | (Phase 4) | — |
 
 esa の検索は MCP ツール `esa_search_posts`(引数 `teamName` が必要 — `.env` の
 `ESA_DEFAULT_TEAM`、または `esa_get_teams` で確認)を使います。スキルがこれを呼びます。
 
-### Slack(Phase 2 / 検討中)
+### Slack — 自前アプリ + ユーザートークン
 
-学科 Slack を検索するには、いずれもワークスペース側の許可が要ります:
-
-| 方法 | 必要な許可 | 検索範囲 |
-| --- | --- | --- |
-| **公式 Slack MCP**(`mcp.slack.com`) | 管理者が Claude を承認済みクライアントとして許可 | 自分が見える全チャンネル |
-| **自前アプリ + ユーザートークン**(`search:read` → `search.messages`) | 管理者がその内部アプリのインストールを承認 | 自分が見える全チャンネル |
-| **自前ボット + `conversations.history`** | メンバーがアプリを作成・招待できる設定なら管理者不要 | Bot を招待したチャンネルのみ |
-
-- Slack の**ワークスペース検索はユーザートークン限定**(Bot トークンでは `search.messages` 不可)。
-- 一番手間が少ないのは公式 MCP(コード不要)。管理者に「Claude / Claude Code コネクタの承認」を打診する。
-- 承認が下りない場合の自前アプリ最小マニフェスト(user スコープのみ):
-  ```yaml
-  display_information: { name: lab-assistant-search }
-  oauth_config:
-    scopes:
-      user: [search:read, users:read, channels:read]
-  ```
-  <https://api.slack.com/apps> → Create New App → From a manifest → Install to Workspace
-  → **User OAuth Token**(`xoxp-...`)を取得。
+Slack の**ワークスペース検索(`search.messages`)はユーザートークン限定**で、公式 MCP は
+ワークスペース管理者の承認が要ります。そこで `search:read` だけを持つ最小アプリ
+([slack-app/](slack-app/))を Slack CLI で学科ワークスペースにインストールし、その
+**User OAuth Token(`xoxp-`)** を `.env` の `SLACK_USER_TOKEN` に入れて raw REST で検索します。
+セットアップは [slack-app/README.md](slack-app/README.md)。`search.mjs` の `slack` ソースがこれを使います。
 
 ## 横断検索(`scripts/bin/search.mjs`)
 
-Calendar(ゼミ)と Discord をまたいでキーワード検索し、共通形式(`source` / `title` / `url` /
-`snippet` / `author` / `timestamp`)の JSON を返します。esa / Slack はバンドル MCP 側で検索し、
-スキルが両方の結果をまとめます。
+Calendar(ゼミ)/ Slack(学科)/ Discord をまたいでキーワード検索し、共通形式
+(`source` / `title` / `url` / `snippet` / `author` / `timestamp`)の JSON を返します。
+esa はバンドル MCP 側で検索し、スキルが結果をまとめます。
 
 ```bash
 node scripts/bin/search.mjs "中間報告会"
+node scripts/bin/search.mjs "M2 中間報告" --source slack --text
 node scripts/bin/search.mjs "可視化 D3" --since 2026-04-01 --limit 30
 node scripts/bin/search.mjs "ゼミ リスケ" --source discord --channels 123,456
-node scripts/bin/search.mjs "発表会" --text            # 人間向けの整形出力
 ```
 
 | オプション | 説明 |
 | --- | --- |
-| `--source a,b` | 検索対象。既定は `calendar,discord` |
+| `--source a,b` | 検索対象。既定は `calendar,slack,discord` |
 | `--since` / `--until` | 期間(`YYYY-MM-DD` か ISO8601) |
 | `--sort` | `relevance`(既定・今日からの近さ順)/ `newest` / `oldest` |
 | `--limit N` | 最大件数(既定 40) |
-| `--channels id,id` | Discord の対象チャンネルを ID で限定 |
+| `--channels a,b` | Discord: チャンネル ID で限定 / Slack: `in:` 演算子でチャンネル名か ID |
 | `--max-channels N` | Discord で自動選択するチャンネル数の上限(既定 80) |
 | `--text` | JSON でなく整形テキストで出力 |
 
+- **Slack** は自前アプリのユーザートークン(`SLACK_USER_TOKEN`)で `search.messages` を叩きます。
+  検索範囲は**そのトークンの持ち主が見えるチャンネル**。`--since` / `--until` は Slack の
+  `after:` / `before:` 演算子に変換されます。未設定ならスキップされます。
 - **Discord** はメッセージ検索 API が Bot では使えないため、対象チャンネルの直近メッセージを
   取得してクライアント側でフィルタします。期間未指定なら各チャンネル直近 100 件のみ。
   `--since` を付けると遡ります。Bot が参加していないチャンネル/閲覧権限の無いチャンネルは
@@ -186,7 +182,7 @@ node scripts/bin/search.mjs "発表会" --text            # 人間向けの整�
 
 | スクリプト | 用途 |
 | --- | --- |
-| `bin/search.mjs "<query>" [opts]` | Calendar(ゼミ)/ Discord の横断検索(上記) |
+| `bin/search.mjs "<query>" [opts]` | Calendar(ゼミ)/ Slack / Discord の横断検索(上記) |
 | `bin/esa-mcp.mjs` | esa 公式 MCP の起動ラッパ(`.mcp.json` から使用。直接実行しない) |
 | `bin/collect-context.mjs <url...>` | URL 群から予定抽出用の文脈を JSON 出力 |
 | `bin/find-duplicate.mjs --summary S --start ISO` | 重複候補イベントを JSON 出力 |

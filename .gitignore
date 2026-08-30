@@ -7,5 +7,11 @@ node_modules/
 bot/dist/
 mcp-server/dist/
 
+# Slack CLI のローカル状態 (slack-app/)
+slack-app/.slack/apps.json
+slack-app/.slack/apps.dev.json
+slack-app/.slack/cache/
+slack-app/.slack/config.json
+
 # os
 .DS_Store

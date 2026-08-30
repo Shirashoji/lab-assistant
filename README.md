@@ -3,6 +3,8 @@
 研究室の情報基盤(Discord / Slack / esa / Google Calendar / Google Drive / GitHub)を
 **横断して検索・調査**し、必要ならゼミの Google Calendar に予定を追加する Claude Code プラグイン。
 
+> **自分の PC に入れて使いたい人は [docs/INSTALL.md](docs/INSTALL.md)**(研究室メンバー向けの導入手順)。
+>
 > `Calendar-agent`(Discord/esa の URL → Google Calendar 予定作成)から fork。
 > 全体構想と進め方は [docs/ROADMAP.md](docs/ROADMAP.md)、開発フローは [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)。
 
@@ -43,6 +45,9 @@
 スキルは自然文でも起動します(例:「次のゼミの発表会いつだっけ」)。
 
 ## セットアップ
+
+> 他の人に配る/自分の PC に新しく入れる場合は、手順をまとめた
+> **[docs/INSTALL.md](docs/INSTALL.md)** の方が読みやすいです。以下は同じ内容の詳細版です。
 
 ### 0. 前提
 

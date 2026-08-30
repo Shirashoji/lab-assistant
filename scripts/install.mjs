@@ -272,9 +272,40 @@ function uninstallClaudeDesktop() {
 }
 
 // ── claude-code ────────────────────────────────────────────
+/**
+ * Claude 用のマーケットプレイス定義 (Agent-Plugins/.claude-plugin/marketplace.json)。
+ * このファイルはプラグインリポジトリの **外** (親ディレクトリ) にあり git 管理されていないので、
+ * 新しく clone した人の環境には存在しない。無ければ作る。
+ * 既に他のプラグイン (calendar-agent など) が並んでいたら壊さずに残す。
+ */
+function ensureClaudeMarketplace() {
+  const entry = {
+    name: PLUGIN_NAME,
+    source: `./${PLUGIN_NAME}`,
+    description: readJson(join(PLUGIN_ROOT, ".claude-plugin", "plugin.json"))?.description || "",
+  };
+  const cur = readJson(CLAUDE_MARKETPLACE);
+  const rest = Array.isArray(cur?.plugins)
+    ? cur.plugins.filter((x) => x?.name !== PLUGIN_NAME)
+    : [];
+  const body = {
+    name: MARKETPLACE_NAME,
+    description: cur?.description || "vdslab の Claude Code プラグイン集",
+    owner: cur?.owner || { name: "vdslab" },
+    plugins: [...rest, entry],
+  };
+  const json = JSON.stringify(body, null, 2) + "\n";
+  if (cur && readFileSync(CLAUDE_MARKETPLACE, "utf8") === json) return;
+  if (DRY) return log(`[dry-run] ${CLAUDE_MARKETPLACE} を書き出します`);
+  mkdirSync(dirname(CLAUDE_MARKETPLACE), { recursive: true });
+  writeFileSync(CLAUDE_MARKETPLACE, json);
+  log(`  マーケットプレイス定義: ${CLAUDE_MARKETPLACE}`);
+}
+
 function installClaudeCode() {
   checkEnv();
   if (!hasClaudeCli()) die("`claude` CLI が見つかりません。Claude Code をインストールしてください。");
+  ensureClaudeMarketplace();
   log("\nマーケットプレイスを登録します…");
   run("claude", ["plugin", "marketplace", "add", MARKETPLACE_ROOT]);
   log("\nプラグインをインストールします…");

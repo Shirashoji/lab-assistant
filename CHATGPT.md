@@ -87,7 +87,16 @@ ChatGPT に渡すエンドポイントは **`https://xxxx-xxxx.trycloudflare.com
      - `MCP_AUTH_TOKEN` を設定した場合 → 「API key / Bearer」を選び、その値を入力
        （UI にトークン欄が無いバージョンでは「認証なし」を選び、トンネル URL の秘匿で運用）
      - 設定しない場合 → 「認証なし」
-4. 保存すると `collect_context` / `find_duplicate_events` / `create_event` の 3 ツールが見えます。
+4. 保存すると次の 6 ツールが見えます。
+
+   | ツール | 用途 |
+   | --- | --- |
+   | `collect_context` | Discord / esa の URL から予定抽出用の文脈を集める |
+   | `find_duplicate_events` | ゼミカレンダーの重複候補を返す |
+   | `create_event` | ゼミカレンダーに予定を作成(書き込み) |
+   | `search_lab` | Calendar / Slack / Discord / GitHub / Drive を横断検索 |
+   | `find_expert` | トピックに詳しい人を根拠付きで推定 |
+   | `list_search_sources` | 使えるソースと `.env` の準備状況 |
 
 ### 5. 使う
 
@@ -111,6 +120,27 @@ ChatGPT の動き:
 4. 重複が無ければ `create_event`。あれば「作成済み」とカレンダーリンクを返す
 
 > `create_event` は書き込みツールなので、ChatGPT が実行前に確認を挟みます。
+
+横断検索・人探しも同じコネクタから使えます。
+
+```
+「MCP」について研究室で誰が詳しいか、根拠のリンク付きで教えて。
+```
+
+```
+「中間報告会」の話がどこで出たか、Slack と Discord と GitHub を横断して調べて。
+```
+
+ChatGPT の動き:
+
+1. `list_search_sources` で使えるソースを確認(結果が薄いときの切り分けに有効)
+2. `search_lab` / `find_expert` を呼ぶ
+3. 返ってきた `hits` / `evidence` の URL を出典として添え、`searched` / `skipped` /
+   `coverage` から「見た範囲」を明示する
+
+> esa はこの MCP サーバーには載っていません(Claude Code / Claude Desktop 側の
+> バンドル MCP で検索します)。ChatGPT から esa の記事も根拠に混ぜたい場合は、
+> `find_expert` の `extraHits` に共通ヒット形で渡してください。
 
 ---
 

@@ -9,8 +9,8 @@ import { sourceReadiness } from "../lib/search.mjs";
 const quiet = process.argv.includes("--quiet");
 const results = [];
 
-function record(name, ok, detail) {
-  results.push({ name, ok, detail });
+function record(name, ok, detail, optional = false) {
+  results.push({ name, ok, detail, optional });
 }
 
 async function checkDiscord() {
@@ -49,6 +49,29 @@ async function checkSlack() {
     record("Slack 接続", true, `User: ${j.user} / Team: ${j.team}`);
   } catch (e) {
     record("Slack 接続", false, e.message);
+  }
+}
+
+async function checkGitHub() {
+  // GitHub は任意機能。未設定なら合否に含めず、下の「横断検索」欄にだけ出す。
+  if (!config.githubToken) return;
+  try {
+    const res = await fetch("https://api.github.com/user", {
+      headers: {
+        Authorization: `Bearer ${config.githubToken}`,
+        Accept: "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2022-11-28",
+        "User-Agent": "lab-assistant",
+      },
+    });
+    const j = await res.json().catch(() => ({}));
+    const remaining = res.headers.get("x-ratelimit-remaining") ?? "不明";
+    if (!res.ok) {
+      return record("GitHub 接続", false, j.message || `HTTP ${res.status}`, true);
+    }
+    record("GitHub 接続", true, `User: ${j.login} / レート制限残り: ${remaining}`, true);
+  } catch (e) {
+    record("GitHub 接続", false, e.message, true);
   }
 }
 
@@ -96,9 +119,9 @@ async function checkGoogle() {
   }
 }
 
-await Promise.all([checkDiscord(), checkEsa(), checkSlack(), checkGoogle()]);
+await Promise.all([checkDiscord(), checkEsa(), checkSlack(), checkGoogle(), checkGitHub()]);
 
-const failed = results.filter((r) => !r.ok);
+const failed = results.filter((r) => !r.ok && !r.optional);
 
 if (quiet) {
   if (failed.length) {
@@ -118,7 +141,7 @@ for (const r of results) {
 
 // 横断検索の準備状況 (任意機能なので合否には含めない)
 const readiness = sourceReadiness();
-process.stdout.write(`\n横断検索 (node scripts/bin/search.mjs — Calendar / Slack / Discord):\n`);
+process.stdout.write(`\n横断検索 (node scripts/bin/search.mjs — Calendar / Slack / Discord / GitHub):\n`);
 for (const [src, s] of Object.entries(readiness)) {
   const mark = s.ready ? "✅" : "—";
   process.stdout.write(`  ${mark} ${src}${s.ready ? "" : ` — ${s.reason}`}\n`);

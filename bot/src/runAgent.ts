@@ -2,12 +2,12 @@ import { query } from "@anthropic-ai/claude-agent-sdk";
 import { config } from "./config.js";
 
 /**
- * calendar-agent の add-event スキルを Claude に実行させ、最終応答テキストを返す。
+ * lab-assistant の add-event スキルを Claude に実行させ、最終応答テキストを返す。
  */
 export async function runAgent(urls: string[]): Promise<string> {
   const prompt =
     `次の URL の内容から Google Calendar に予定を追加してください。` +
-    `calendar-agent プラグインの add-event スキルの手順に従ってください。\n\n` +
+    `lab-assistant プラグインの add-event スキルの手順に従ってください。\n\n` +
     `URLs:\n${urls.map((u) => `- ${u}`).join("\n")}\n\n` +
     `重要:\n` +
     `- これは Discord Bot 経由の自動実行です。ユーザーへの対話的確認は省略し、` +

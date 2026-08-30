@@ -1,4 +1,4 @@
-// calendar-agent のコアロジック (scripts/lib/*.mjs) への型なしブリッジ。
+// lab-assistant のコアロジック (scripts/lib/*.mjs) への型なしブリッジ。
 // これらは依存ゼロの素の ESM モジュールで型定義を持たないため @ts-ignore で読み込む。
 // 実行時 (tsx / node) は相対パスでそのまま解決される。
 

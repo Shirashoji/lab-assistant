@@ -7,12 +7,12 @@ const json = (data: unknown) => ({
 });
 
 /**
- * calendar-agent のツールを登録した MCP サーバーを生成する。
+ * lab-assistant のツールを登録した MCP サーバーを生成する。
  * stdio / Streamable HTTP どちらのトランスポートからも使う。
  */
 export function makeServer(): McpServer {
   const server = new McpServer({
-    name: "calendar-agent",
+    name: "lab-assistant",
     version: "0.1.0",
   });
 

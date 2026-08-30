@@ -1,9 +1,9 @@
 {
-  "name": "calendar-agent-bot",
+  "name": "lab-assistant-bot",
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "返信に Bot をメンションすると calendar-agent スキルを実行する Discord Bot",
+  "description": "返信に Bot をメンションすると lab-assistant スキルを実行する Discord Bot",
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "start": "tsx src/index.ts",

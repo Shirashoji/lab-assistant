@@ -87,7 +87,7 @@ const failed = results.filter((r) => !r.ok);
 if (quiet) {
   if (failed.length) {
     process.stderr.write(
-      `[calendar-agent] 設定未完了: ${failed
+      `[lab-assistant] 設定未完了: ${failed
         .map((f) => f.name)
         .join(", ")} — ${PLUGIN_ROOT}/.env を確認 (.env.example 参照)\n`
     );
@@ -95,7 +95,7 @@ if (quiet) {
   process.exit(0);
 }
 
-process.stdout.write(`calendar-agent セットアップ確認 (${PLUGIN_ROOT}/.env)\n\n`);
+process.stdout.write(`lab-assistant セットアップ確認 (${PLUGIN_ROOT}/.env)\n\n`);
 for (const r of results) {
   process.stdout.write(`  ${r.ok ? "✅" : "❌"} ${r.name}${r.detail ? ` — ${r.detail}` : ""}\n`);
 }

@@ -12,7 +12,7 @@ async function apiGet(path, { retry = 1 } = {}) {
   const res = await fetch(`${API}${path}`, {
     headers: {
       Authorization: `Bot ${token}`,
-      "User-Agent": "calendar-agent (https://github.com/, 0.1.0)",
+      "User-Agent": "lab-assistant (https://github.com/, 0.1.0)",
     },
   });
   if (res.status === 429 && retry > 0) {

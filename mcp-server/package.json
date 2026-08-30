@@ -1,9 +1,9 @@
 {
-  "name": "calendar-agent-mcp",
+  "name": "lab-assistant-mcp",
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "calendar-agent のロジックを MCP ツールとして公開する (ChatGPT / Codex / Claude Desktop など向け)",
+  "description": "lab-assistant のロジックを MCP ツールとして公開する (ChatGPT / Codex / Claude Desktop など向け)",
   "scripts": {
     "build": "tsc",
     "start:stdio": "node dist/stdio.js",

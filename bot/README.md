@@ -1,10 +1,10 @@
-# calendar-agent Discord Bot（追加コンポーネント）
+# lab-assistant Discord Bot（追加コンポーネント）
 
 予定が書かれた Discord メッセージに**返信 + Bot へメンション**すると、
-`calendar-agent` プラグインの `add-event` スキルを Claude Agent SDK 経由で実行し、
+`lab-assistant` プラグインの `add-event` スキルを Claude Agent SDK 経由で実行し、
 Google Calendar に予定を作成して結果を返信します。
 
-この Bot は必須ではありません。まずはプラグイン本体（`/calendar-agent:add-event`）だけで運用できます。
+この Bot は必須ではありません。まずはプラグイン本体（`/lab-assistant:add-event`）だけで運用できます。
 
 ## 仕組み
 
@@ -15,7 +15,7 @@ Google Calendar に予定を作成して結果を返信します。
 bot/src/index.ts  ── 返信先の Discord メッセージ URL と本文中の esa リンクを収集
    │
    ▼
-bot/src/runAgent.ts ── query() で Claude を起動（plugins に Calendar-agent を渡す）
+bot/src/runAgent.ts ── query() で Claude を起動（plugins に lab-assistant を渡す）
    │
    ▼
 add-event スキル ── collect-context → 抽出 → find-duplicate → create-event
@@ -28,7 +28,7 @@ add-event スキル ── collect-context → 抽出 → find-duplicate → cre
 
 ## セットアップ
 
-1. 先に親ディレクトリ（`../`）の `calendar-agent` プラグインのセットアップを完了させる
+1. 先に親ディレクトリ（`../`）の `lab-assistant` プラグインのセットアップを完了させる
    （`../.env` に Discord / esa / Google の認証情報が入っている状態）。
 2. 依存をインストール:
    ```bash
@@ -44,7 +44,7 @@ add-event スキル ── collect-context → 抽出 → find-duplicate → cre
    | `DISCORD_BOT_TOKEN` | プラグインと同じ Bot Token |
    | `ALLOWED_GUILD_IDS` | 応答を許可するサーバー ID（カンマ区切り、空なら全部） |
    | `ANTHROPIC_API_KEY` | Anthropic API キー |
-   | `PLUGIN_ROOT` | `calendar-agent` プラグインの絶対パス（既定はこの `bot/` の 1 つ上） |
+   | `PLUGIN_ROOT` | `lab-assistant` プラグインの絶対パス（既定はこの `bot/` の 1 つ上） |
 4. Bot の権限: `View Channels` / `Read Message History` / `Send Messages`。
    Developer Portal で **MESSAGE CONTENT INTENT** を ON。
 5. 起動:
@@ -56,7 +56,7 @@ add-event スキル ── collect-context → 抽出 → find-duplicate → cre
 ## 使い方
 
 1. 誰かが予定を投稿（1 通でも、複数に分割でも、esa リンクだけでも可）。
-2. そのメッセージに返信し、本文で Bot をメンション（例: `@calendar-agent お願い`）。
+2. そのメッセージに返信し、本文で Bot をメンション（例: `@lab-assistant お願い`）。
 3. Bot が予定を作成し、「📅 予定を追加しました …」または「✅ この予定は作成済みです …」＋
    カレンダーリンクを返信します。
 

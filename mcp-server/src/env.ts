@@ -1,4 +1,4 @@
-// mcp-server/.env と ../.env (calendar-agent) を process.env に読み込む。
+// mcp-server/.env と ../.env (lab-assistant) を process.env に読み込む。
 // 既存の環境変数は上書きしない (ホスティング環境の値を優先)。
 import { readFileSync, existsSync } from "node:fs";
 import { dirname, resolve } from "node:path";
@@ -7,7 +7,7 @@ import { fileURLToPath } from "node:url";
 const here = dirname(fileURLToPath(import.meta.url));
 const candidates = [
   resolve(here, "..", ".env"), // mcp-server/.env
-  resolve(here, "..", "..", ".env"), // Calendar-agent/.env
+  resolve(here, "..", "..", ".env"), // lab-assistant/.env
 ];
 
 for (const path of candidates) {

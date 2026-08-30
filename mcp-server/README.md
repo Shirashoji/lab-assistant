@@ -1,10 +1,10 @@
-# calendar-agent MCP サーバー
+# lab-assistant MCP サーバー
 
-`calendar-agent` のコアロジック（`../scripts/lib/`）を **MCP ツール**として公開します。
+`lab-assistant` のコアロジック（`../scripts/lib/`）を **MCP ツール**として公開します。
 Claude Code プラグインを読み込めないクライアント（**ChatGPT** のカスタムコネクタ、
 **OpenAI Codex CLI**、**Claude Desktop** など）から同じ機能を使うためのものです。
 
-Claude Code で使うだけなら不要です（プラグイン本体の `/calendar-agent:add-event` を使ってください）。
+Claude Code で使うだけなら不要です（プラグイン本体の `/lab-assistant:add-event` を使ってください）。
 
 ## 公開ツール
 
@@ -18,7 +18,7 @@ Claude Code で使うだけなら不要です（プラグイン本体の `/calen
 
 ## 認証情報
 
-esa / Discord / Google の認証は **親ディレクトリ `../` の `.env`**（`calendar-agent` 本体）を読みます。
+esa / Discord / Google の認証は **親ディレクトリ `../` の `.env`**（`lab-assistant` 本体）を読みます。
 先にそちらのセットアップ（`../README.md`）を済ませてください。
 ホスティング環境では `.env` の代わりに環境変数を設定できます（環境変数が優先）。
 
@@ -56,9 +56,9 @@ npm run dev:http
 `~/.codex/config.toml`（先に `npm run build` 済みであること）:
 
 ```toml
-[mcp_servers.calendar-agent]
+[mcp_servers.lab-assistant]
 command = "node"
-args = ["/ABS/PATH/Calendar-agent/mcp-server/dist/stdio.js"]
+args = ["/ABS/PATH/lab-assistant/mcp-server/dist/stdio.js"]
 ```
 
 ### Claude Desktop / `claude mcp add`
@@ -66,7 +66,7 @@ args = ["/ABS/PATH/Calendar-agent/mcp-server/dist/stdio.js"]
 Claude Desktop アプリは `node ../scripts/install.mjs claude-desktop` が自動でやります。手動なら:
 
 ```bash
-claude mcp add calendar-agent -- node /ABS/PATH/Calendar-agent/mcp-server/dist/stdio.js
+claude mcp add lab-assistant -- node /ABS/PATH/lab-assistant/mcp-server/dist/stdio.js
 ```
 
 ### ChatGPT（カスタムコネクタ）

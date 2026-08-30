@@ -78,12 +78,12 @@ app.get(MCP_PATH, replaySession);
 app.delete(MCP_PATH, replaySession);
 
 app.get("/", (_req, res) => {
-  res.json({ name: "calendar-agent-mcp", transport: "streamable-http", endpoint: MCP_PATH });
+  res.json({ name: "lab-assistant-mcp", transport: "streamable-http", endpoint: MCP_PATH });
 });
 
 app.listen(PORT, () => {
   console.error(
-    `calendar-agent MCP server (http) → http://localhost:${PORT}${MCP_PATH}` +
+    `lab-assistant MCP server (http) → http://localhost:${PORT}${MCP_PATH}` +
       (AUTH_TOKEN ? " [Bearer 認証あり]" : " [認証なし]")
   );
 });

@@ -8,4 +8,4 @@ const server = makeServer();
 const transport = new StdioServerTransport();
 await server.connect(transport);
 // stdout は JSON-RPC 専用。ログは stderr へ。
-process.stderr.write("calendar-agent MCP server (stdio) 起動\n");
+process.stderr.write("lab-assistant MCP server (stdio) 起動\n");

@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// calendar-agent を各アプリに導入するためのインストーラ。
+// lab-assistant を各アプリに導入するためのインストーラ。
 //
 //   node scripts/install.mjs claude-desktop     Claude Desktop アプリに MCP サーバーを登録
 //   node scripts/install.mjs claude-code        Claude Code にプラグインを登録
@@ -24,7 +24,7 @@ import { fileURLToPath } from "node:url";
 import { randomBytes } from "node:crypto";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const PLUGIN_ROOT = resolve(__dirname, ".."); // Calendar-agent/
+const PLUGIN_ROOT = resolve(__dirname, ".."); // lab-assistant/
 const MARKETPLACE_ROOT = resolve(PLUGIN_ROOT, ".."); // Agent-Plugins/
 const MCP_DIR = join(PLUGIN_ROOT, "mcp-server");
 const MCP_STDIO_JS = join(MCP_DIR, "dist", "stdio.js");
@@ -178,15 +178,15 @@ function installClaudeDesktop() {
     command: resolveNodePath(), // node をフルパスで固定 (GUI アプリは PATH を持たないため)
     args: [MCP_STDIO_JS],
   };
-  const existing = JSON.stringify(cfg.mcpServers["calendar-agent"] || null);
+  const existing = JSON.stringify(cfg.mcpServers["lab-assistant"] || null);
   if (existing === JSON.stringify(entry)) {
     log("既に最新の内容で登録済みです。");
     return;
   }
-  cfg.mcpServers["calendar-agent"] = entry;
+  cfg.mcpServers["lab-assistant"] = entry;
 
   log("\n登録内容:");
-  log(JSON.stringify({ "calendar-agent": entry }, null, 2));
+  log(JSON.stringify({ "lab-assistant": entry }, null, 2));
 
   if (DRY) {
     log("\n[dry-run] 書き込みは行いません。");
@@ -200,12 +200,12 @@ function installClaudeDesktop() {
 function uninstallClaudeDesktop() {
   const cfgPath = claudeDesktopConfigPath();
   const cfg = existsSync(cfgPath) ? readJson(cfgPath) : null;
-  if (!cfg || !cfg.mcpServers || !cfg.mcpServers["calendar-agent"]) {
+  if (!cfg || !cfg.mcpServers || !cfg.mcpServers["lab-assistant"]) {
     log("Claude Desktop には登録されていません。");
     return;
   }
-  delete cfg.mcpServers["calendar-agent"];
-  if (DRY) return log("[dry-run] calendar-agent エントリを削除します。");
+  delete cfg.mcpServers["lab-assistant"];
+  if (DRY) return log("[dry-run] lab-assistant エントリを削除します。");
   backup(cfgPath);
   writeFileSync(cfgPath, JSON.stringify(cfg, null, 2) + "\n");
   log("✅ 削除しました。Claude Desktop を再起動してください。");
@@ -218,16 +218,16 @@ function installClaudeCode() {
   log("\nマーケットプレイスを登録します…");
   run("claude", ["plugin", "marketplace", "add", MARKETPLACE_ROOT]);
   log("\nプラグインをインストールします…");
-  run("claude", ["plugin", "install", "calendar-agent@vdslab-agent-plugins"]);
+  run("claude", ["plugin", "install", "lab-assistant@vdslab-agent-plugins"]);
   log(
     "\n✅ 完了。実行中の Claude Code セッションでは `/reload-plugins` を実行してください。\n" +
-      "   使い方: /calendar-agent:add-event <discord-or-esa-url>"
+      "   使い方: /lab-assistant:add-event <discord-or-esa-url>"
   );
 }
 
 function uninstallClaudeCode() {
   if (!hasClaudeCli()) return warn("`claude` CLI が見つかりません。");
-  run("claude", ["plugin", "uninstall", "calendar-agent"]);
+  run("claude", ["plugin", "uninstall", "lab-assistant"]);
 }
 
 function hasClaudeCli() {
@@ -302,7 +302,7 @@ function installChatgpt() {
   log(`\n3) ChatGPT (Web またはアプリ / 同じアカウント設定):`);
   log(`   Settings → Apps → Advanced settings → Developer mode を ON`);
   log(`   → カスタムコネクタを追加:`);
-  log(`     Name : calendar-agent`);
+  log(`     Name : lab-assistant`);
   log(`     URL  : https://<トンネルのドメイン>/mcp`);
   log(`     Auth : API key / Bearer  →  ${DRY ? "<生成されるトークン>" : token}`);
 
@@ -329,7 +329,7 @@ function which(bin) {
 
 // ── status ─────────────────────────────────────────────────
 function status() {
-  log("calendar-agent 導入状況\n");
+  log("lab-assistant 導入状況\n");
 
   // .env
   log(`  ${existsSync(PLUGIN_ENV) ? "✅" : "❌"} 認証設定 (${PLUGIN_ENV})`);
@@ -346,13 +346,13 @@ function status() {
   // claude desktop
   const cfgPath = claudeDesktopConfigPath();
   const cfg = existsSync(cfgPath) ? readJson(cfgPath) : null;
-  const inDesktop = !!cfg?.mcpServers?.["calendar-agent"];
+  const inDesktop = !!cfg?.mcpServers?.["lab-assistant"];
   log(`  ${inDesktop ? "✅" : "❌"} Claude Desktop アプリ (${cfgPath})`);
 
   // claude code
   if (hasClaudeCli()) {
     const r = spawnSync("claude", ["plugin", "list"], { encoding: "utf8" });
-    const on = (r.stdout || "").includes("calendar-agent");
+    const on = (r.stdout || "").includes("lab-assistant");
     log(`  ${on ? "✅" : "❌"} Claude Code プラグイン`);
   } else {
     log("  —  Claude Code (claude CLI 未検出)");

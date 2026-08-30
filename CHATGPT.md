@@ -1,6 +1,6 @@
 # ChatGPT で使う
 
-`calendar-agent` は Claude Code プラグインですが、コアロジックは MCP サーバー
+`lab-assistant` は Claude Code プラグインですが、コアロジックは MCP サーバー
 （[`mcp-server/`](mcp-server/)）としても公開しているので、ChatGPT からも同じことができます。
 
 > **共通のセットアップ**（Discord Bot / esa トークン / Google OAuth / `.env`）は
@@ -36,7 +36,7 @@ ChatGPT で「プラグイン」と呼ばれているものは、2026 年 7 月�
 
 ### 1. 共通セットアップを済ませる
 
-[README.md](README.md) に従って `Calendar-agent/.env` に Discord / esa / Google の認証情報を入れ、
+[README.md](README.md) に従って `lab-assistant/.env` に Discord / esa / Google の認証情報を入れ、
 `node scripts/bin/check-setup.mjs` がすべて ✅ になる状態にします。
 
 ### 2. MCP サーバーを起動
@@ -56,7 +56,7 @@ cp .env.example .env        # 必要なら PORT / MCP_AUTH_TOKEN を編集
 npm run start:http          # → http://localhost:8787/mcp
 ```
 
-- esa / Discord / Google の認証は自動で `../.env`（calendar-agent 本体）を読みます。
+- esa / Discord / Google の認証は自動で `../.env`（lab-assistant 本体）を読みます。
 - **推奨**: `mcp-server/.env` の `MCP_AUTH_TOKEN` に長いランダム文字列を設定
   （`openssl rand -hex 32`）。設定すると `/mcp` へのアクセスに
   `Authorization: Bearer <値>` が必須になります。
@@ -81,7 +81,7 @@ ChatGPT に渡すエンドポイントは **`https://xxxx-xxxx.trycloudflare.com
    （バージョンによっては **Connectors → Advanced**。「Connectors」は現在「Plugins」表記）。
 2. **Apps（Plugins）→ カスタムコネクタを追加**。
 3. 入力:
-   - **Name**: `calendar-agent`
+   - **Name**: `lab-assistant`
    - **MCP Server URL**: `https://xxxx.trycloudflare.com/mcp`
    - **Authentication**:
      - `MCP_AUTH_TOKEN` を設定した場合 → 「API key / Bearer」を選び、その値を入力
@@ -158,9 +158,9 @@ cd mcp-server && npm install && npm run build
 
 ```toml
 # ~/.codex/config.toml
-[mcp_servers.calendar-agent]
+[mcp_servers.lab-assistant]
 command = "node"
-args = ["/ABS/PATH/Calendar-agent/mcp-server/dist/stdio.js"]
+args = ["/ABS/PATH/lab-assistant/mcp-server/dist/stdio.js"]
 ```
 
 以降、Codex に「この Discord / esa の URL の予定をカレンダーに追加して」と頼めば

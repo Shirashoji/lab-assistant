@@ -114,6 +114,20 @@ export const config = {
     const n = Number(env("SEARCH_MAX_PAGES_PER_CHANNEL", "3"));
     return Number.isFinite(n) && n > 0 ? Math.min(n, 20) : 3;
   },
+
+  // ── GitHub (Phase 4) ─────────────────────────────────────
+  /** GitHub REST API 用の Personal Access Token (classic でも fine-grained でも可)。 */
+  get githubToken() {
+    return env("GITHUB_TOKEN");
+  },
+  /** 検索対象の org (カンマ区切り)。未設定なら GitHub 全体を検索する。 */
+  get githubOrgs() {
+    return list("GITHUB_ORGS");
+  },
+  /** 検索対象を特定リポジトリに絞る場合 (owner/name のカンマ区切り)。 */
+  get githubRepos() {
+    return list("GITHUB_REPOS");
+  },
 };
 
 // Node 18+ (global fetch) を要求

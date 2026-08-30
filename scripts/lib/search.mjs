@@ -5,7 +5,8 @@
 //   - discord … Bot は検索 API 不可。直近メッセージを取得してフィルタする
 //   - calendar … ゼミカレンダー限定の期間 + キーワード検索
 //   - slack   … 自前アプリのユーザートークンで search.messages (管理者承認済み前提)
-// esa / GitHub / Drive は公式 MCP (.mcp.json でバンドル) 側で検索し、
+// GitHub    … REST search API を Personal Access Token で検索
+// esa / Drive は公式 MCP (.mcp.json でバンドル) 側で検索し、
 // スキルがそれらと本モジュールの結果をまとめる。
 //
 // すべてのソースは共通の「ヒット」形に正規化して返す:
@@ -19,9 +20,10 @@ import { config } from "./config.mjs";
 import { searchMessages as searchDiscord } from "./discord.mjs";
 import { searchMessages as searchSlack } from "./slack.mjs";
 import { searchEvents as searchCalendar } from "./gcal.mjs";
+import { searchGitHub } from "./github.mjs";
 
 /** このモジュールがコードとして検索できるソース。 */
-export const AVAILABLE_SOURCES = ["calendar", "slack", "discord"];
+export const AVAILABLE_SOURCES = ["calendar", "slack", "discord", "github"];
 
 /** そのソースを検索する前提が整っているか (.env)。 */
 export function sourceReadiness() {
@@ -37,6 +39,10 @@ export function sourceReadiness() {
     discord: {
       ready: !!config.discordToken,
       reason: "DISCORD_BOT_TOKEN (対象は DISCORD_GUILD_IDS、未指定なら Bot の全参加ギルド)",
+    },
+    github: {
+      ready: !!config.githubToken,
+      reason: "GITHUB_TOKEN (対象は GITHUB_ORGS / GITHUB_REPOS)",
     },
   };
 }
@@ -84,6 +90,19 @@ const RUNNERS = {
         : undefined;
     return { hits, warnings, coverage };
   },
+  async github(query, opts) {
+    const { hits, warnings, total } = await searchGitHub({
+      query,
+      since: opts.since,
+      until: opts.until,
+      limit: opts.limit,
+      orgs: opts.orgs?.length ? opts.orgs : config.githubOrgs,
+      repos: opts.repos?.length ? opts.repos : config.githubRepos,
+      kinds: opts.kinds,
+    });
+    const coverage = total != null ? `${total} 件中 ${hits.length} 件` : undefined;
+    return { hits, warnings, coverage };
+  },
 };
 
 /**
@@ -91,7 +110,8 @@ const RUNNERS = {
  * @param {string} query
  * @param {{sources?:string[], since?:string, until?:string, limit?:number,
  *          sort?:"relevance"|"newest"|"oldest", channels?:string[], calendarId?:string,
- *          maxChannels?:number, maxPagesPerChannel?:number}} [opts]
+ *          maxChannels?:number, maxPagesPerChannel?:number, orgs?:string[], repos?:string[],
+ *          kinds?:string[]}} [opts]
  */
 export async function searchAll(query, opts = {}) {
   const q = String(query || "").trim();

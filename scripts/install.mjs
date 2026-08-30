@@ -6,10 +6,11 @@
 //   node scripts/install.mjs uninstall <target>  解除する
 //   node scripts/install.mjs status              各アプリの導入状況を表示
 //
-//   <target>: claude-code | claude-desktop | codex | chatgpt-web | all
+//   <target>: claude-code | claude-desktop | chatgpt-desktop | codex | chatgpt-web | all
 //     claude-code    Claude Code のプラグイン (skills + MCP + hooks)
 //     claude-desktop Claude Desktop アプリに MCP サーバーを登録
-//     codex          ChatGPT デスクトップ / Codex のプラグイン (skills + MCP)
+//     chatgpt-desktop ChatGPT デスクトップのみ (codex CLI を使わない場合)
+//     codex          ChatGPT デスクトップ + Codex CLI のプラグイン (skills + MCP)
 //     chatgpt-web    ChatGPT Web 用の HTTP コネクタ (要 HTTPS 公開)
 //     all            claude-code + codex (ローカルで完結するもの)
 //
@@ -463,6 +464,40 @@ function uninstallCodex() {
   );
 }
 
+// ── chatgpt-desktop (ChatGPT デスクトップのみ / codex CLI を使わない) ──
+//
+// ChatGPT デスクトップは ~/.agents/plugins/marketplace.json だけを読む。
+// codex CLI のプラグイン登録 (~/.codex/plugins/cache へのコピー) は不要なので、
+// 「ChatGPT デスクトップでは使うが codex CLI では使わない」場合はこちらを使う。
+
+function installChatgptDesktop({ quiet = false } = {}) {
+  checkEnv();
+  ensureMcpBuilt();
+  ensurePersonalMarketplace();
+  if (!quiet) {
+    log(
+      "\n✅ ChatGPT デスクトップ用の設定を用意しました。\n" +
+        "   アプリの Settings → Plugins で 'vdslab (local)' の lab-assistant を有効にしてください。\n" +
+        "   (アプリ起動中に入れた場合は再起動が要ることがあります)\n" +
+        "   注意: 個人マーケットプレイスはリポジトリへのシンボリックリンクなので、\n" +
+        "         リポジトリを編集すればそのまま反映されます (入れ直し不要)。"
+    );
+  }
+}
+
+function updateChatgptDesktop() {
+  installChatgptDesktop({ quiet: true });
+  log("\n✅ 最新の内容に入れ替えました (シンボリックリンクなので常に最新です)。");
+}
+
+function uninstallChatgptDesktop() {
+  const link = join(PERSONAL_MARKETPLACE_DIR, PLUGIN_NAME);
+  if (DRY) return log(`[dry-run] ${link} を削除します`);
+  rmSync(link, { force: true });
+  log(`  個人マーケットプレイスのリンクを削除: ${link}`);
+  log("\n✅ 解除しました。");
+}
+
 // ── chatgpt (Web / HTTP コネクタ) ───────────────────────────
 function ensureAuthToken() {
   let lines = existsSync(MCP_ENV) ? readFileSync(MCP_ENV, "utf8").split(/\r?\n/) : [];
@@ -624,8 +659,14 @@ const TARGETS = {
     update: updateClaudeDesktop,
     uninstall: uninstallClaudeDesktop,
   },
+  "chatgpt-desktop": {
+    label: "ChatGPT デスクトップ (個人マーケットプレイス)",
+    install: installChatgptDesktop,
+    update: updateChatgptDesktop,
+    uninstall: uninstallChatgptDesktop,
+  },
   codex: {
-    label: "ChatGPT デスクトップ / Codex プラグイン",
+    label: "ChatGPT デスクトップ + Codex CLI プラグイン",
     install: installCodex,
     update: updateCodex,
     uninstall: uninstallCodex,
@@ -654,7 +695,8 @@ function usage() {
       "  <target>:",
       "    claude-code     Claude Code のプラグイン (skills + MCP + hooks)",
       "    claude-desktop  Claude Desktop アプリに MCP サーバーを登録",
-      "    codex           ChatGPT デスクトップ / Codex のプラグイン (skills + MCP)",
+      "    chatgpt-desktop ChatGPT デスクトップのみ (codex CLI を使わない場合)",
+      "    codex           ChatGPT デスクトップ + Codex CLI のプラグイン (skills + MCP)",
       "    chatgpt-web     ChatGPT Web 用の HTTP コネクタ (要 HTTPS 公開)",
       `    all             ${ALL.join(" + ")}`,
       "",

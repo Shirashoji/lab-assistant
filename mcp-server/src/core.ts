@@ -74,6 +74,12 @@ type SearchResult = {
   query: string;
   generatedAt: string;
   window: { since: string | null; until: string | null };
+  expansion?: {
+    enabled: boolean;
+    expanded: boolean;
+    groups: Array<{ base: string; variants: string[] }>;
+    description: string | null;
+  };
   searched: string[];
   skipped: Array<{ source: string; reason: string }>;
   countBySource: Record<string, number>;
@@ -92,6 +98,12 @@ type SearchOpts = {
   calendarId?: string;
   kinds?: string[];
   enrichCode?: boolean;
+  /** 関連語への展開 (既定 true)。false で完全一致寄りに絞る */
+  expand?: boolean;
+  /** 呼び出し側が足したい関連語。元のクエリと OR で結ばれる */
+  relatedTerms?: string[];
+  /** esa のチーム名 (省略時は ESA_DEFAULT_TEAM) */
+  team?: string;
 };
 
 type ExpertResult = {
@@ -157,7 +169,10 @@ export const core = {
       extraHits?: Hit[];
       includeBots?: boolean;
     } = {}
-  ): Promise<ExpertResult & Pick<SearchResult, "window" | "searched" | "skipped" | "coverage" | "warnings">> {
+  ): Promise<
+    ExpertResult &
+      Pick<SearchResult, "window" | "expansion" | "searched" | "skipped" | "coverage" | "warnings">
+  > {
     // 人物ごとに畳み込むので、検索そのものは広めに取る。
     // 誰が書いたかが主題なので、code ヒットの著者補完も既定で有効にする。
     const result = await searchAllTyped(query, {
@@ -179,6 +194,7 @@ export const core = {
     return {
       ...experts,
       window: result.window,
+      expansion: result.expansion,
       searched: result.searched,
       skipped: result.skipped,
       coverage: result.coverage,

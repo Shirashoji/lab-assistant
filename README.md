@@ -16,7 +16,7 @@
 | スキル `find-schedule` / `check-shared` / `find-channel` / `search-lab` | ✅ 動作 |
 | スキル `find-expert` — トピックに詳しい人を根拠付きで探す — `scripts/bin/find-expert.mjs` | ✅ 動作 |
 | GitHub 検索(Issue / PR / コード / コミット / Discussions) | ✅ 動作(`GITHUB_TOKEN` が必要) |
-| Google Drive 検索(全文) | ⚠ `auth-google.mjs` の再実行が必要(`drive.readonly` スコープ追加) |
+| Google Drive 検索(全文)+ 資料の読み取り — `search.mjs --source drive` / `drive-fetch.mjs` | ✅ 動作 |
 | Claude Desktop 対応 — `search_lab` / `find_expert` を MCP ツールとして公開 | ✅ 動作 |
 
 ## アーキテクチャ
@@ -127,7 +127,8 @@ node scripts/bin/check-setup.mjs
 | `GITHUB_TOKEN` | — | GitHub 検索用の PAT。未設定なら github ソースはスキップ。**必要な権限は [docs/GITHUB-TOKEN.md](docs/GITHUB-TOKEN.md)** |
 | `GITHUB_ORGS` | — | 検索対象の org(カンマ区切り)。例 `vdslab`。**実質必須**(未設定だと GitHub 全体が対象) |
 | `GITHUB_REPOS` | — | さらに絞る場合の `owner/name`(カンマ区切り) |
-| `DRIVE_FOLDER_IDS` | — | Drive 検索の対象フォルダ ID(カンマ区切り) |
+| `DRIVE_ID` | — | 研究室の共有ドライブ ID。設定するとその共有ドライブ配下だけを再帰検索。**実質必須**(未設定だとマイドライブ + 全共有ドライブが対象)。ID は `node scripts/bin/list-drives.mjs` |
+| `DRIVE_FOLDER_IDS` | — | さらに絞る場合のフォルダ ID(カンマ区切り)。直下のみでサブフォルダは再帰しない |
 | `DRIVE_MIME_TYPES` | — | Drive 検索の対象 MIME タイプ(カンマ区切り) |
 
 ## 接続するカレンダーを変える
@@ -136,6 +137,38 @@ node scripts/bin/check-setup.mjs
 2. `node scripts/bin/list-calendars.mjs` で ID を確認(`owner` / `writer` のみ書き込み可)
 3. その ID を `.env` の `GOOGLE_CALENDAR_ID` に設定
 4. `node scripts/bin/check-setup.mjs` で「対象カレンダー: <名前>(… / 権限: owner|writer)」を確認
+
+## 検索する Google ドライブを研究室の共有ドライブに絞る
+
+1. 研究室の共有ドライブに、OAuth に使った Google アカウントをメンバーとして追加してもらう
+2. `node scripts/bin/list-drives.mjs` で共有ドライブ名と ID を確認
+3. その ID を `.env` の `DRIVE_ID` に設定
+4. `node scripts/bin/check-setup.mjs` で`共有ドライブ <ID> に限定` の表示と出ることを確認
+
+未設定だとマイドライブと参加中の全共有ドライブが対象になり、個人ファイルまでヒットします。
+共有ドライブではなく「共有フォルダ」の場合は `DRIVE_ID` ではなく `DRIVE_FOLDER_IDS` を使いますが、
+こちらは直下のファイルのみでサブフォルダを再帰しません。
+一時的に別のドライブを見たいときは `--drive <ID>` で上書きできます。
+
+### 資料の中身を読む(読み取り専用)
+
+検索でタイトルしか分からないときは、ファイルを落として読みます。
+
+```bash
+node scripts/bin/drive-fetch.mjs "https://docs.google.com/presentation/d/xxx/edit" --text
+```
+
+出力された `保存先:` のパスを Read で読みます。Google ドキュメントは `text/plain`、
+スプレッドシートは CSV、スライドと図形描画は PDF に変換され、PDF や Office ファイルは
+そのまま落ちます(Claude Code の Read は PDF をネイティブに読めます)。
+テキスト系なら `--print` で標準出力に直接出せます。
+`.pptx` などの Office 形式は落とせても Read では読めないので、その旨を出力に添えます。
+
+**書き込みは実装していません。** [scripts/lib/gdrive.mjs](scripts/lib/gdrive.mjs) は Drive に GET
+しか投げず、OAuth スコープも `drive.readonly` だけを要求します(auth-google.mjs)。
+Discord や esa の他人が書いた本文を読み込む以上、プロンプトインジェクションで資料を
+書き換えられる経路を最初から作らない方針です。Google 公式の Drive MCP を入れると
+`update_file` / `trash_file` / `share_file` が付いてくるため、現時点では採用していません。
 
 ## バンドル MCP(`.mcp.json`)
 
@@ -248,6 +281,8 @@ node scripts/install.mjs claude-desktop   # 依存導入 + ビルド + 設定登
 | スクリプト | 用途 |
 | --- | --- |
 | `bin/search.mjs "<query>" [opts]` | Calendar(ゼミ)/ Slack / Discord / GitHub / Drive の横断検索(上記) |
+| `bin/list-drives.mjs [--json]` | アクセスできる共有ドライブ一覧(`DRIVE_ID` を調べる) |
+| `bin/drive-fetch.mjs "<URL\|fileId>" [--text\|--print]` | Drive の資料をローカルに落として Read で読む(読み取り専用) |
 | `bin/find-expert.mjs "<topic>" [opts]` | トピックに詳しい人を根拠付きで推定(下記) |
 | `bin/esa-mcp.mjs` | esa 公式 MCP の起動ラッパ(`.mcp.json` から使用。直接実行しない) |
 | `bin/seminar-calendar-mcp.mjs` | ゼミカレンダー専用 MCP サーバー(`.mcp.json` から使用) |

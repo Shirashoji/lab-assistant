@@ -75,12 +75,20 @@ esa にあるのか分からなくても、横断的に探して答える。イ�
       User-Agent 文字列、`check-setup.mjs` のログ)
 - [ ] GitHub にリモートリポジトリを作成して push(ユーザー操作)
 
-### Phase 1 — 検索基盤
-- [ ] `scripts/lib/search.mjs` … 共通の検索結果型(source / title / url / snippet / author / ts)
-- [ ] `esa.mjs` に全文検索を追加
-- [ ] `discord.mjs` にチャンネル横断検索を追加
-- [ ] `gcal.mjs` に期間・キーワード検索を追加
-- [ ] `bin/search.mjs` CLI + `check-setup.mjs` 更新
+### Phase 1 — 検索基盤 ✅ (feat/search-core)
+- [x] `scripts/lib/search.mjs` … 共通の検索結果型(source / title / url / snippet / author / timestamp / extra)+ オーケストレータ `searchAll`
+- [x] `scripts/lib/text.mjs` … 検索用テキストユーティリティ(正規化 / トークナイズ / 抜粋)
+- [x] `esa.mjs` に全文検索 `searchPosts` を追加(要 `ESA_DEFAULT_TEAM`)
+- [x] `discord.mjs` にチャンネル横断検索 `searchMessages` を追加
+      (Bot は検索 API 不可のため直近メッセージを取得しクライアント側でフィルタ。
+      スノーフレークで活動期間を判定 → 活動の新しい順に maxChannels まで → 並列取得)
+- [x] `gcal.mjs` に `searchEvents`(期間 + キーワード)を追加
+- [x] `bin/search.mjs` CLI(`--source` / `--since` / `--until` / `--sort` / `--limit` /
+      `--channels` / `--max-channels` / `--text`)
+- [x] `check-setup.mjs` に横断検索の準備状況を表示
+- 既知の制約: Discord は Bot に閲覧権限のあるチャンネルのみ。学科の重要チャンネル
+  (週報・ゼミアナウンス等)は Bot ロールへの権限付与が必要。期間未指定だと各チャンネル
+  直近 100 件のみ。全文インデックスは無いので大規模検索は `--since` 前提。
 
 ### Phase 2 — Slack 連携
 - [ ] Slack App 作成手順を README に追加(必要スコープ: `search:read` 等)

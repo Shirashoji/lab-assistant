@@ -4,6 +4,7 @@
 import { config, PLUGIN_ROOT } from "../lib/config.mjs";
 import { getUser as esaUser } from "../lib/esa.mjs";
 import { listCalendars } from "../lib/gcal.mjs";
+import { sourceReadiness } from "../lib/search.mjs";
 
 const quiet = process.argv.includes("--quiet");
 const results = [];
@@ -99,6 +100,15 @@ process.stdout.write(`lab-assistant セットアップ確認 (${PLUGIN_ROOT}/.en
 for (const r of results) {
   process.stdout.write(`  ${r.ok ? "✅" : "❌"} ${r.name}${r.detail ? ` — ${r.detail}` : ""}\n`);
 }
+
+// 横断検索の準備状況 (任意機能なので合否には含めない)
+const readiness = sourceReadiness();
+process.stdout.write(`\n横断検索 (node scripts/bin/search.mjs):\n`);
+for (const [src, s] of Object.entries(readiness)) {
+  const mark = s.ready ? "✅" : "—";
+  process.stdout.write(`  ${mark} ${src}${s.ready ? "" : ` — ${s.reason}`}\n`);
+}
+
 process.stdout.write(
   failed.length
     ? `\n${failed.length} 件の問題があります。README.md のセットアップ手順を参照してください。\n`

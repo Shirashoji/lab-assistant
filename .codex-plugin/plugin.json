@@ -1,0 +1,21 @@
+{
+  "name": "lab-assistant",
+  "version": "0.1.0",
+  "description": "研究室の情報基盤 (Discord / Slack / esa / Google Calendar / Google Drive / GitHub) を横断検索・調査し、トピックに詳しい人を探し、必要ならゼミの Google Calendar に予定を追加する",
+  "author": { "name": "takuma" },
+  "keywords": ["discord", "slack", "esa", "google-calendar", "google-drive", "github", "search", "research-lab"],
+  "skills": "./skills/",
+  "mcpServers": "./.mcp.json",
+  "interface": {
+    "displayName": "Lab Assistant",
+    "shortDescription": "研究室の情報基盤を横断検索し、ゼミの予定を管理する",
+    "developerName": "vdslab",
+    "category": "Productivity",
+    "capabilities": ["Read", "Write"],
+    "defaultPrompt": [
+      "次のゼミはいつ?",
+      "MCP に詳しい人は?",
+      "この Discord の予定をカレンダーに入れて"
+    ]
+  }
+}

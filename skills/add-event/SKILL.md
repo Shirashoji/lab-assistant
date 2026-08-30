@@ -62,32 +62,29 @@ node "${CLAUDE_PLUGIN_ROOT}/scripts/bin/collect-context.mjs" "<url1>" "<url2>" .
 
 ### 5. 重複チェック → 作成
 
+予定操作は **`seminar-calendar` MCP**（`plugin:lab-assistant:seminar-calendar`）を使う。
+このサーバーは `.env` の `GOOGLE_CALENDAR_ID`（= **ゼミの Google Calendar**）に固定されている。
+**Claude アプリ標準の Google Calendar コネクタは使わない**（別カレンダーを指すことがある）。
+
 各予定について:
 
-```bash
-node "${CLAUDE_PLUGIN_ROOT}/scripts/bin/find-duplicate.mjs" --summary "<summary>" --start "<start ISO>"
-```
-
-- 出力の `candidates[]` を意味的に確認する。`likelyMatch:true` は機械的なヒントに過ぎないので、タイトル・日時・場所から見て**同じ予定**だと判断できる候補があるかを自分で決める。
-- **同一と判断した場合**: その予定は作成せず、次を返す。
-  > ✅ この予定は作成済みです: <candidate.summary>（<日時>）
-  > <candidate.htmlLink>
-- **無い場合**: 予定 JSON を作って作成する。
-
-```bash
-echo '{"summary":"...","start":"2026-09-01T19:00:00+09:00","end":"2026-09-01T20:00:00+09:00","location":"...","description":"...\n\nSource: <url>（...）"}' \
-  | node "${CLAUDE_PLUGIN_ROOT}/scripts/bin/create-event.mjs"
-```
-
-  作成先は既定で `.env` の `GOOGLE_CALENDAR_ID`（= **ゼミの Google Calendar**）。この経路は
-  プラグイン同梱の自前 OAuth を使うので、**Claude アプリ標準の Google Calendar コネクタ
-  （別カレンダーを指すことがある）は使わない**。ユーザーが「〜のカレンダーに」と別カレンダーを
-  明示した場合のみ `--calendar "<id>"` を付ける（`find-duplicate.mjs` にも同じ `--calendar` を渡す）。
-  どのカレンダーがあるか不明なときは `node "${CLAUDE_PLUGIN_ROOT}/scripts/bin/list-calendars.mjs"` で確認。
+1. `find_duplicate_events { summary, start }` を呼ぶ。
+   - 出力の `candidates[]` を意味的に確認する。`likelyMatch:true` は機械的ヒントに過ぎないので、
+     タイトル・日時・場所から見て**同じ予定**だと判断できる候補があるかを自分で決める。
+   - **同一と判断した場合**: 作成せず、次を返す。
+     > ✅ この予定は作成済みです: <candidate.summary>（<日時>）
+     > <candidate.htmlLink>
+2. **無い場合**: `create_event { summary, start, end?, location?, description, allDay?, recurrence? }`
+   で作成する。`description` 末尾に必ず `Source: <URL>（著者/チャンネル名 または esa カテゴリ）` を入れる。
 
   成功したら:
   > 📅 予定を追加しました: <summary>（<日時>）
   > <event.htmlLink>
+
+**MCP が使えない場合のフォールバック**（bot / ChatGPT 経由など）:
+`node "${CLAUDE_PLUGIN_ROOT}/scripts/bin/find-duplicate.mjs" --summary "<s>" --start "<ISO>"` →
+`echo '<event json>' | node "${CLAUDE_PLUGIN_ROOT}/scripts/bin/create-event.mjs"`。
+別カレンダーを明示された場合のみ両方に `--calendar "<id>"` を付ける。
 
 ### 6. まとめて報告する
 

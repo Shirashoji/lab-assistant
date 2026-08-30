@@ -58,15 +58,19 @@ esa にあるのか分からなくても、横断的に探して答える。イ�
 - **スキルが両者を順に呼んで結果を統合する**。横断検索オーケストレータをコードに持たせない
   (`lib/search.mjs` は Calendar + Discord のみの薄い実行器に縮小した)。
 
-## Google Calendar の扱い(重要)
+## Google Calendar の扱い(重要)— Phase C で対応済み
 
-- ゼミ用の Google Calendar MCP と、Claude アプリ標準の Google Calendar MCP の **2 つが共存** している。
-  予定の確認・追加は必ず **ゼミ用** が使われるようにする。
-- 対策(いずれか / 併用):
-  - 予定操作はプラグイン同梱の `scripts/lib/gcal.mjs`(専用 OAuth + `GOOGLE_CALENDAR_ID` = ゼミ)経由に統一し、
-    汎用 Calendar MCP は使わないとスキル手順に明記する。
-  - `check-setup.mjs` で対象カレンダーが「尾上ゼミ ミーティング」で writer/owner であることを検証。
-- 予定を探すときのルール:「まずゼミ Google Calendar を確認 → 無ければユーザーに追加可否を確認 → 承認後に追加」。
+- ゼミ用の Google Calendar と、Claude アプリ標準の Google Calendar コネクタの **2 つが共存**。
+  予定の確認・追加は必ず **ゼミ用** に向ける必要がある。
+- 対応(Phase C, `feat/seminar-calendar-mcp`):
+  - `.mcp.json` に **`seminar-calendar`** サーバーを宣言(`scripts/bin/seminar-calendar-mcp.mjs`、
+    依存ゼロ stdio MCP、`scripts/lib/mcp-stdio.mjs` の自作ヘルパを使用)。
+    全ツールが `.env` の `GOOGLE_CALENDAR_ID` に固定される。
+  - ツール: `list_events` / `search_events` / `find_duplicate_events` / `create_event` / `list_calendars`。
+  - スキル(`find-schedule` / `add-event`)は `plugin:lab-assistant:seminar-calendar` のツールを
+    第一に使い、「標準 Calendar コネクタは使わない」と明記。`bin/*.mjs` は bot / ChatGPT 用フォールバック。
+  - `check-setup.mjs` が対象カレンダー(「尾上ゼミ ミーティング」/ owner)とバンドル MCP の状態を表示。
+- 予定を探すルール:「まずゼミ Calendar を確認 → 無ければ追加可否をユーザーに確認 → 承認後に作成」。
 
 ## スキル設計方針
 
@@ -136,6 +140,17 @@ esa にあるのか分からなくても、横断的に探して答える。イ�
 - 各スキル共通: 「見たソース・期間・カバレッジ・スキップを必ず明記」「副作用は事前確認」
 - 検証: find-schedule の各ステップを実データで実行、「M2 中間報告会」で Slack の発表会アナウンス
       (9/11-12)と esa の先生 MTG 議事録が取れることを確認
+
+### Phase C — ゼミカレンダー専用 MCP ✅ (feat/seminar-calendar-mcp)
+- [x] `scripts/lib/mcp-stdio.mjs` — 依存ゼロの最小 MCP サーバー(改行区切り JSON-RPC)ヘルパ。
+      在フライトのリクエストを待ってから終了する
+- [x] `scripts/bin/seminar-calendar-mcp.mjs` — `lib/gcal.mjs` / `lib/dedupe.mjs` をラップした
+      ゼミカレンダー固定の MCP。ツール 5 種
+- [x] `.mcp.json` に `seminar-calendar` を追加
+- [x] `check-setup.mjs` にバンドル MCP(esa + seminar-calendar)の状態表示
+- [x] `skills/find-schedule` / `skills/add-event` を `seminar-calendar` MCP 優先に更新
+- 検証: `initialize` / `tools/list` / `list_calendars`(target=尾上ゼミ, owner) /
+      `search_events`(週報 16 件) / `find_duplicate_events`(likelyMatch 検出)を実データで確認
 
 ### Phase 4 — Google Drive / GitHub
 - [ ] Drive: 公式 MCP or Drive API での資料検索

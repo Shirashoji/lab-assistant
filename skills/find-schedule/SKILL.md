@@ -33,12 +33,12 @@ argument-hint: "<探したいイベント(例: M2 中間報告会)>"
 
 ### 2. ゼミの Google Calendar を最優先で確認する
 
-```bash
-node "${CLAUDE_PLUGIN_ROOT}/scripts/bin/search.mjs" "<イベント名>" --source calendar --limit 10 --text
-```
+**`seminar-calendar` MCP の `search_events`**(`plugin:lab-assistant:seminar-calendar`)を使う。
+引数 `{ query: "<イベント名>" }`。このサーバーは `.env` の `GOOGLE_CALENDAR_ID`(= ゼミカレンダー)
+だけを見る。**Claude アプリ標準の Google Calendar コネクタは使わない**(別カレンダーを参照してしまうため)。
 
-`search.mjs` の calendar ソースは `.env` の `GOOGLE_CALENDAR_ID`(= ゼミカレンダー)だけを見る。
-**Claude アプリ標準の Google Calendar コネクタは使わない**(別カレンダーを参照してしまうため)。
+MCP が使えない場合のフォールバック:
+`node "${CLAUDE_PLUGIN_ROOT}/scripts/bin/search.mjs" "<イベント名>" --source calendar --limit 10 --text`
 
 - ヒットしたら日時・タイトル・場所・説明・`htmlLink` を控える。ただしここで止めず、手順 3〜4 で
   裏取り(場所・時刻の変更が別ソースに出ていないか)をする。
@@ -83,9 +83,13 @@ node "${CLAUDE_PLUGIN_ROOT}/scripts/bin/search.mjs" "<イベント名>" --source
 
 > この予定はゼミのカレンダーに入っていません。追加しますか?
 
-承認されたら **`add-event` スキルの手順 5(重複チェック → 作成)** に渡す:
-`find-duplicate.mjs` → `create-event.mjs`(`description` 末尾に `Source: <URL>(ソース名)`)。
+承認されたら `seminar-calendar` MCP で:
+1. `find_duplicate_events { summary, start }` で重複候補を確認(同一と判断できる候補があれば作成しない)
+2. 無ければ `create_event { summary, start, end?, location?, description }` で作成。
+   `description` 末尾に `Source: <URL>(ソース名)` を必ず入れる。
+
 承認が無ければ作成しない。日時が曖昧なら追加しない(ユーザーに確認)。
+(MCP が使えない場合は `add-event` スキルの手順 5 = `bin/find-duplicate.mjs` → `bin/create-event.mjs`。)
 
 ## 注意
 

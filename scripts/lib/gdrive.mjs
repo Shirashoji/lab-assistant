@@ -5,6 +5,8 @@
 // `drive.readonly` スコープが要る。既存のリフレッシュトークンは Calendar スコープしか
 // 持っていないので、その場合は `node scripts/bin/auth-google.mjs` を再実行して
 // トークンを取り直す必要がある (403 のときに日本語でその旨を投げる)。
+import { writeFile, mkdir } from "node:fs/promises";
+import { join } from "node:path";
 import { getAccessToken } from "./gcal.mjs";
 import { config } from "./config.mjs";
 
@@ -267,6 +269,148 @@ export async function listDrives() {
     if (!pageToken) break;
   }
   return drives;
+}
+
+/**
+ * Drive の URL または生の ID からファイル ID を取り出す。
+ * 対応: /file/d/<id>/, /document/d/<id>/, /spreadsheets/d/<id>/,
+ * /presentation/d/<id>/, /drive/folders/<id>, ?id=<id>、および生の ID。
+ * @param {string} input
+ * @returns {string}
+ */
+export function parseFileId(input) {
+  const raw = String(input || "").trim();
+  if (!raw) throw new Error("ファイル ID または Drive の URL を渡してください");
+  if (!raw.includes("/") && !raw.includes("?")) return raw;
+
+  const byPath = raw.match(/\/(?:d|folders)\/([A-Za-z0-9_-]{10,})/);
+  if (byPath) return byPath[1];
+  try {
+    const id = new URL(raw).searchParams.get("id");
+    if (id) return id;
+  } catch {
+    /* URL として解釈できなければ下のエラーに落とす */
+  }
+  throw new Error(`Drive のファイル ID を URL から取り出せません: ${raw}`);
+}
+
+/** ファイルのメタデータ (名前 / 種別 / 更新日時など) を取る。 */
+export async function getFileMeta(fileId) {
+  return driveFetchJson(
+    `/files/${encodeURIComponent(fileId)}`,
+    new URLSearchParams({
+      fields:
+        "id,name,mimeType,webViewLink,modifiedTime,createdTime,size," +
+        "owners(displayName,emailAddress),lastModifyingUser(displayName)",
+      supportsAllDrives: "true",
+    })
+  );
+}
+
+/**
+ * Google ネイティブ形式をローカルで読める形に書き出すときの変換先。
+ * スライドと図形描画は本文だけ抜くとレイアウトが失われるので PDF にする
+ * (Claude Code の Read は PDF をそのまま読める)。
+ */
+const DOWNLOAD_EXPORT = {
+  "application/vnd.google-apps.document": { mimeType: "text/plain", ext: ".txt" },
+  "application/vnd.google-apps.spreadsheet": { mimeType: "text/csv", ext: ".csv" },
+  "application/vnd.google-apps.presentation": { mimeType: "application/pdf", ext: ".pdf" },
+  "application/vnd.google-apps.drawing": { mimeType: "application/pdf", ext: ".pdf" },
+};
+
+/** 拡張子が無い名前に、MIME から推測した拡張子を足す。 */
+const EXT_BY_MIME = {
+  "application/pdf": ".pdf",
+  "text/plain": ".txt",
+  "text/csv": ".csv",
+  "text/markdown": ".md",
+  "application/json": ".json",
+  "image/png": ".png",
+  "image/jpeg": ".jpg",
+};
+
+/** ファイル名からパス区切りと制御文字を落とす (ディレクトリ脱出の防止)。 */
+function safeFileName(name) {
+  return (
+    String(name || "file")
+      // eslint-disable-next-line no-control-regex
+      .replace(/[\u0000-\u001f/\\]/g, "_")
+      .replace(/^\.+/, "_")
+      .slice(0, 120) || "file"
+  );
+}
+
+/**
+ * ファイルをローカルに落として、そのパスを返す (読み取り専用)。
+ * Google ネイティブ形式は export、それ以外は alt=media でそのまま取得する。
+ * PDF や Office ファイルもバイト列のまま落とせるので、Claude Code の Read で読める。
+ *
+ * このモジュールは Drive に対して GET しか投げない。書き込み・削除の API は
+ * 意図的に実装していないので、プロンプトインジェクションでファイルを
+ * 書き換えられる経路は存在しない (トークンも drive.readonly スコープ)。
+ *
+ * @param {{fileId:string, outDir?:string, maxBytes?:number, meta?:object}} opts
+ * @returns {Promise<{path:string, name:string, mimeType:string, exportedAs:string|null,
+ *                    bytes:number, webViewLink:string|null, modifiedTime:string|null}>}
+ */
+export async function downloadFile({ fileId, outDir, maxBytes = 50 * 1024 * 1024, meta }) {
+  if (!fileId) throw new Error("fileId は必須です");
+  const info = meta || (await getFileMeta(fileId));
+  const mt = info.mimeType || "";
+
+  if (mt === "application/vnd.google-apps.folder") {
+    throw new Error("フォルダはダウンロードできません (中のファイルを指定してください)");
+  }
+  const declared = Number(info.size || 0);
+  if (declared && declared > maxBytes) {
+    throw new Error(
+      `ファイルが大きすぎます (${Math.round(declared / 1024 / 1024)}MB > ` +
+        `${Math.round(maxBytes / 1024 / 1024)}MB)。--max-mb で上限を上げられます。`
+    );
+  }
+
+  const exportAs = DOWNLOAD_EXPORT[mt];
+  if (!exportAs && mt.startsWith("application/vnd.google-apps.")) {
+    throw new Error(`${kindOfMime(mt)} はダウンロードに対応していません`);
+  }
+
+  const res = exportAs
+    ? await driveRequest(
+        `/files/${encodeURIComponent(fileId)}/export`,
+        new URLSearchParams({ mimeType: exportAs.mimeType })
+      )
+    : await driveRequest(
+        `/files/${encodeURIComponent(fileId)}`,
+        new URLSearchParams({ alt: "media", supportsAllDrives: "true" })
+      );
+
+  const buf = Buffer.from(await res.arrayBuffer());
+  if (buf.length > maxBytes) {
+    throw new Error(
+      `ファイルが大きすぎます (${Math.round(buf.length / 1024 / 1024)}MB)。--max-mb で上限を上げられます。`
+    );
+  }
+
+  const dir = outDir || join(process.env.TMPDIR || "/tmp", "lab-assistant-drive");
+  await mkdir(dir, { recursive: true });
+
+  let name = safeFileName(info.name);
+  const ext = exportAs ? exportAs.ext : EXT_BY_MIME[mt] || "";
+  if (ext && !name.toLowerCase().endsWith(ext)) name += ext;
+  // 同名ファイルの取り違えを避けるため ID の先頭を足す
+  const path = join(dir, `${fileId.slice(0, 8)}_${name}`);
+  await writeFile(path, buf);
+
+  return {
+    path,
+    name: info.name || name,
+    mimeType: mt,
+    exportedAs: exportAs ? exportAs.mimeType : null,
+    bytes: buf.length,
+    webViewLink: info.webViewLink || null,
+    modifiedTime: info.modifiedTime || null,
+  };
 }
 
 /** 本文をプレーンテキストで書き出せる Google ネイティブ形式。 */

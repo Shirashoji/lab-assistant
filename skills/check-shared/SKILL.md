@@ -67,6 +67,17 @@ node "${CLAUDE_PLUGIN_ROOT}/scripts/bin/search.mjs" "<検索語>" --source disco
 どちらも未設定ならスキップされる(`skipped` に出る)。無理に全部見る必要はないが、
 **見なかったソースは回答に書く**こと。
 
+Drive のヒットが「同じものを共有済みか」の判断に足りない(タイトルだけでは分からない)ときは、
+そのファイルを落として中身を読む。Google スライドは PDF に変換されるので Read で読める。
+
+```bash
+node "${CLAUDE_PLUGIN_ROOT}/scripts/bin/drive-fetch.mjs" "<Drive の URL か fileId>" --text
+```
+
+出力の `保存先:` のパスを Read で読む。落とすのは判断に必要な 1〜2 件だけにとどめる。
+出力の最後の行が「Read では読めません」と言っていたら従うこと(`.pptx` などの Office 形式)。
+このスクリプトは読み取り専用で、Drive 側を変更することはない。
+
 ### 5. 自分が過去に紹介済みかを確認する(週報 Visualization 用)
 
 トピックが「週報で紹介する Visualization」なら、手順 2〜4 のヒットの中に **自分の投稿**が無いかを

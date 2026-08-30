@@ -42,6 +42,21 @@ node "${CLAUDE_PLUGIN_ROOT}/scripts/bin/search.mjs" "<検索語>" --since <SINCE
 GitHub は `--kinds issues,code` で種別を選べる。)
 `hits[]` の permalink・チャンネル・投稿者・日付・抜粋を控える。`skipped` / `warnings` を確認する。
 
+### 3.5 Drive の資料を深く読む(必要なときだけ)
+
+Drive のヒットがタイトルと更新日しか分からず、それでは答えられないときだけ、ファイルを落として読む。
+Google ドキュメントはテキスト、スライドは PDF に変換されるので、どちらも Read でそのまま読める。
+
+```bash
+node "${CLAUDE_PLUGIN_ROOT}/scripts/bin/drive-fetch.mjs" "<Drive の URL か fileId>" --text
+```
+
+出力の `保存先:` のパスを Read で読む。テキスト系なら `--print` で標準出力に直接出せる。
+出力の最後の行が「Read では読めません」と言っていたら従うこと(`.pptx` などの Office 形式は
+バイト列のままなので Read では開けない。その場合は Drive の Web リンクを案内する)。
+**落とすのは本当に必要な数件だけ**にする(全ヒットを落とさない)。
+このスクリプトは読み取り専用で、Drive 側を変更することはない。
+
 ### 4. まとめて答える
 
 - **時系列**または**論点別**に整理する。誰がいつ何を言ったか、決まったこと / 未決のことを分ける。

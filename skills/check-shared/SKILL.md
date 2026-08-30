@@ -9,7 +9,7 @@ argument-hint: "<共有予定の URL またはトピック>"
 
 # 共有前の重複チェック
 
-> 🚧 **下書き**(Phase 3)。Slack ステップは Slack MCP 接続後に有効。
+> 🚧 **下書き**(Phase 3)。
 
 ## 目的
 
@@ -31,8 +31,12 @@ esa 公式 MCP の `esa_search_posts`(`plugin:lab-assistant:esa`、`teamName` �
 
 ### 3. Slack を検索する
 
-Slack MCP が接続されていれば、その検索ツールでキーワード / URL を検索。
-一致メッセージの permalink・チャンネル・投稿者・日付を控える。未接続ならスキップし回答に明記する。
+```bash
+node "${CLAUDE_PLUGIN_ROOT}/scripts/bin/search.mjs" "<複合キーワード>" --source slack --since <90日前> --text
+```
+
+一致メッセージの permalink・チャンネル・投稿者・日付を控える。`SLACK_USER_TOKEN` 未設定なら
+skipped に出るので、その旨を回答に明記する。
 
 ### 4. Discord を検索する
 

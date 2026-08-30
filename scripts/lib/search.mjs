@@ -1,10 +1,11 @@
 // 研究室の各ソースを横断検索する共通ロジック。依存ゼロ。
 // bin/search.mjs と (将来) mcp-server / スキルから使う。
 //
-// ここでコードとして検索するのは「公式 MCP が無い / 精密な制御が要る」ソースだけ:
+// ここでコードとして検索するのは「公式 MCP が無い / 精密な制御が要る」ソース:
 //   - discord … Bot は検索 API 不可。直近メッセージを取得してフィルタする
 //   - calendar … ゼミカレンダー限定の期間 + キーワード検索
-// esa / Slack / GitHub / Drive は公式 MCP (.mcp.json でバンドル) 側で検索し、
+//   - slack   … 自前アプリのユーザートークンで search.messages (管理者承認済み前提)
+// esa / GitHub / Drive は公式 MCP (.mcp.json でバンドル) 側で検索し、
 // スキルがそれらと本モジュールの結果をまとめる。
 //
 // すべてのソースは共通の「ヒット」形に正規化して返す:
@@ -16,10 +17,11 @@
 
 import { config } from "./config.mjs";
 import { searchMessages as searchDiscord } from "./discord.mjs";
+import { searchMessages as searchSlack } from "./slack.mjs";
 import { searchEvents as searchCalendar } from "./gcal.mjs";
 
 /** このモジュールがコードとして検索できるソース。 */
-export const AVAILABLE_SOURCES = ["calendar", "discord"];
+export const AVAILABLE_SOURCES = ["calendar", "slack", "discord"];
 
 /** そのソースを検索する前提が整っているか (.env)。 */
 export function sourceReadiness() {
@@ -27,6 +29,10 @@ export function sourceReadiness() {
     calendar: {
       ready: !!(config.googleClientId && config.googleClientSecret && config.googleRefreshToken),
       reason: "GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET / GOOGLE_REFRESH_TOKEN",
+    },
+    slack: {
+      ready: !!config.slackUserToken,
+      reason: "SLACK_USER_TOKEN (自前アプリ lab-assistant-search の xoxp- トークン)",
     },
     discord: {
       ready: !!config.discordToken,
@@ -44,6 +50,18 @@ const RUNNERS = {
       calendarId: opts.calendarId,
     });
     return { hits, warnings };
+  },
+  async slack(query, opts) {
+    const { hits, warnings, total } = await searchSlack({
+      query,
+      since: opts.since,
+      until: opts.until,
+      limit: opts.limit,
+      channels: opts.channels,
+    });
+    const coverage =
+      total != null && total > hits.length ? `${total} 件中 ${hits.length} 件` : undefined;
+    return { hits, warnings, coverage };
   },
   async discord(query, opts) {
     const { hits, warnings, searchedChannels, candidateChannels, forbiddenChannels } = await searchDiscord({

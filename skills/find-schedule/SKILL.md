@@ -9,8 +9,7 @@ argument-hint: "<探したいイベント(例: 中間報告会)>"
 
 # 研究室イベントの日程を横断検索する
 
-> 🚧 **下書き**(Phase 3)。Slack ステップは Slack MCP 接続後に有効。
-> 全体像は [docs/ROADMAP.md](../../docs/ROADMAP.md)。
+> 🚧 **下書き**(Phase 3)。全体像は [docs/ROADMAP.md](../../docs/ROADMAP.md)。
 
 ## 目的
 
@@ -40,16 +39,15 @@ esa 公式 MCP のツール `esa_search_posts`(`plugin:lab-assistant:esa`)で
 「次回ゼミ」「議事録」「<イベント名>」などを検索する。`teamName` は `.env` の
 `ESA_DEFAULT_TEAM`(不明なら `esa_get_teams` で確認)。直近記事の「次回の予定」記述を探す。
 
-### 4. Discord / Slack の直近アナウンスを確認する
+### 4. Slack / Discord の直近アナウンスを確認する
 
-リスケや変更連絡が直前に出ている可能性がある。
+リスケや変更連絡が直前に出ている可能性がある。学科の予定(M2 中間報告会など)は Slack 側にあることが多い。
 
 ```bash
-node "${CLAUDE_PLUGIN_ROOT}/scripts/bin/search.mjs" "<イベント名> 日程 リスケ" --source discord --since <60日前> --text
+node "${CLAUDE_PLUGIN_ROOT}/scripts/bin/search.mjs" "<イベント名> 日程 リスケ" --source slack,discord --since <60日前> --text
 ```
 
-Slack MCP が接続されていれば、その検索ツールでも「<イベント名>」「日程」を調べる
-(学科の予定は Slack 側にあることも多い)。未接続ならスキップし、その旨を回答に明記する。
+`SLACK_USER_TOKEN` 未設定なら slack はスキップされる(結果の `skipped` に出る)。その旨を回答に明記する。
 
 ### 5. 統合して回答する
 

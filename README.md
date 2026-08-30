@@ -80,6 +80,16 @@ cp .env.example .env
 [slack-app/README.md](slack-app/README.md) の手順で最小アプリをインストールし、
 **User OAuth Token(`xoxp-`)** を `.env` の `SLACK_USER_TOKEN` に入れる。未設定でも他機能は動く。
 
+### 3.6 GitHub(任意 / コード・Issue・Discussions の検索用)
+
+1. <https://github.com/settings/tokens> で **classic PAT** を発行し、`repo` スコープを付ける
+   (public リポジトリだけなら `public_repo`)
+2. `.env` に `GITHUB_TOKEN` と `GITHUB_ORGS`(例 `vdslab`)を設定
+3. `node scripts/bin/check-github-token.mjs` で機能ごとの可否を確認
+
+必要な権限の詳細・fine-grained PAT の場合・レート制限・トラブルシューティングは
+**[docs/GITHUB-TOKEN.md](docs/GITHUB-TOKEN.md)** にまとめてあります。
+
 ### 4. Google Calendar の OAuth(ゼミ用カレンダーを対象に)
 
 1. <https://console.cloud.google.com/> でプロジェクト作成 → **Google Calendar API** を有効化
@@ -114,8 +124,8 @@ node scripts/bin/check-setup.mjs
 | `GOOGLE_CALENDAR_ID` | — | 対象カレンダー。**ゼミカレンダーの ID を推奨**。既定 `primary` |
 | `TIMEZONE` | — | 既定 `Asia/Tokyo` |
 | `OAUTH_REDIRECT_PORT` | — | 既定 `4779` |
-| `GITHUB_TOKEN` | — | GitHub 検索用の PAT。未設定なら github ソースはスキップ |
-| `GITHUB_ORGS` | — | 検索対象の org(カンマ区切り)。例 `vdslab`。未設定だと GitHub 全体 |
+| `GITHUB_TOKEN` | — | GitHub 検索用の PAT。未設定なら github ソースはスキップ。**必要な権限は [docs/GITHUB-TOKEN.md](docs/GITHUB-TOKEN.md)** |
+| `GITHUB_ORGS` | — | 検索対象の org(カンマ区切り)。例 `vdslab`。**実質必須**(未設定だと GitHub 全体が対象) |
 | `GITHUB_REPOS` | — | さらに絞る場合の `owner/name`(カンマ区切り) |
 | `DRIVE_FOLDER_IDS` | — | Drive 検索の対象フォルダ ID(カンマ区切り) |
 | `DRIVE_MIME_TYPES` | — | Drive 検索の対象 MIME タイプ(カンマ区切り) |
@@ -247,6 +257,7 @@ node scripts/install.mjs claude-desktop   # 依存導入 + ビルド + 設定登
 | `bin/auth-google.mjs` | Google リフレッシュトークン取得(初回のみ) |
 | `bin/list-calendars.mjs [--json]` | アクセスできるカレンダーと ID・権限を一覧 |
 | `bin/check-setup.mjs [--quiet]` | 設定と API 疎通の確認(横断検索の準備状況も表示) |
+| `bin/check-github-token.mjs [--org X] [--json]` | `GITHUB_TOKEN` で**どの検索機能まで使えるか**を実際に叩いて確認([docs/GITHUB-TOKEN.md](docs/GITHUB-TOKEN.md)) |
 
 実体は `scripts/lib/`(`search` / `experts` / `collect` / `dedupe` / `discord` / `esa` / `slack` / `github` / `gdrive` / `gcal` / `url` / `text` / `mcp-stdio` / `config`)。
 `bin/` は薄いラッパー。同じ `lib/` を `bot/`(任意の Discord Bot)と `mcp-server/`(任意の MCP サーバー)も共有します。

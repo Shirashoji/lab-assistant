@@ -201,6 +201,9 @@ Docker / リモート前提で `.env` 一元管理と噛み合わず、Drive は
 - ~~Drive / GitHub は公式 MCP を使う想定~~ → Phase 4 で自前実装に決定(上記)。
 - Drive を実際に使うには `node scripts/bin/auth-google.mjs` の再実行(スコープ追加)が要る。
 - GitHub は `.env` に `GITHUB_TOKEN` / `GITHUB_ORGS=vdslab` を入れると有効になる。
+  必要な権限は `docs/GITHUB-TOKEN.md` にまとめた(classic PAT + `repo` を推奨。
+  Search 系エンドポイントに必要な fine-grained 権限は GitHub が明記していないため)。
+  `scripts/bin/check-github-token.mjs` が機能ごとの可否を実際に叩いて確認する。
 - Slack: 自前アプリ + ユーザートークン方式で実装済み(管理者承認は不要だった / 2026-08-30)。
   トークン失効時は slack-app を再インストールして `SLACK_USER_TOKEN` を差し替える。
   重複アプリ `A0BTQ73GE57`(`--environment local` で試した残骸)は `slack app delete` で掃除可。

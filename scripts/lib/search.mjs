@@ -44,7 +44,7 @@ export function sourceReadiness() {
     },
     github: {
       ready: !!config.githubToken,
-      reason: "GITHUB_TOKEN (対象は GITHUB_ORGS / GITHUB_REPOS)",
+      reason: "GITHUB_TOKEN (対象は GITHUB_ORGS / GITHUB_REPOS。権限は docs/GITHUB-TOKEN.md)",
     },
     drive: {
       ready: !!(config.googleClientId && config.googleClientSecret && config.googleRefreshToken),

@@ -103,11 +103,16 @@ for (const r of results) {
 
 // 横断検索の準備状況 (任意機能なので合否には含めない)
 const readiness = sourceReadiness();
-process.stdout.write(`\n横断検索 (node scripts/bin/search.mjs):\n`);
+process.stdout.write(`\n横断検索 (node scripts/bin/search.mjs — Calendar / Discord):\n`);
 for (const [src, s] of Object.entries(readiness)) {
   const mark = s.ready ? "✅" : "—";
   process.stdout.write(`  ${mark} ${src}${s.ready ? "" : ` — ${s.reason}`}\n`);
 }
+process.stdout.write(
+  `\nバンドル MCP (.mcp.json — Claude Code がプラグイン読み込み時に自動登録):\n` +
+    `  ${config.esaToken ? "✅" : "—"} esa (plugin:lab-assistant:esa) — ` +
+    `${config.esaToken ? "@esaio/esa-mcp-server を .env の ESA_ACCESS_TOKEN で起動" : "ESA_ACCESS_TOKEN 未設定"}\n`
+);
 
 process.stdout.write(
   failed.length

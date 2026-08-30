@@ -44,6 +44,20 @@ esa にあるのか分からなくても、横断的に探して答える。イ�
 4. **`search-lab`** — 汎用横断検索。トピックを与えて全ソースを検索し出典付きで要約。
 5. **`add-event`**(継承) — URL や本文から予定を抽出 → 重複チェック → ゼミカレンダーへ作成。
 
+## アーキテクチャ方針(2026-08-30 更新)
+
+- **公式 MCP がある情報源はその MCP をバンドルする**。プラグインルートの `.mcp.json` に宣言すると
+  Claude Code が `plugin:lab-assistant:<server>` として自動登録する。
+  認証情報は `scripts/bin/<svc>-mcp.mjs` の起動ラッパで `.env` から注入し、一元管理を保つ。
+  - esa … `@esaio/esa-mcp-server`(実装済み)
+  - Slack … 公式 `mcp.slack.com`(管理者承認が必要。下記)
+  - GitHub / Google Drive … 公式 MCP(Phase 4)
+- **公式 MCP が無い / 精密制御が要るものは `scripts/` の依存ゼロ Node で実装する**。
+  - Discord 検索(Bot は検索 API 不可)… `lib/discord.mjs` + `bin/search.mjs`
+  - ゼミカレンダーの予定確認・作成・重複判定 … `lib/gcal.mjs` / `lib/dedupe.mjs`
+- **スキルが両者を順に呼んで結果を統合する**。横断検索オーケストレータをコードに持たせない
+  (`lib/search.mjs` は Calendar + Discord のみの薄い実行器に縮小した)。
+
 ## Google Calendar の扱い(重要)
 
 - ゼミ用の Google Calendar MCP と、Claude アプリ標準の Google Calendar MCP の **2 つが共存** している。
@@ -83,16 +97,29 @@ esa にあるのか分からなくても、横断的に探して答える。イ�
       (Bot は検索 API 不可のため直近メッセージを取得しクライアント側でフィルタ。
       スノーフレークで活動期間を判定 → 活動の新しい順に maxChannels まで → 並列取得)
 - [x] `gcal.mjs` に `searchEvents`(期間 + キーワード)を追加
-- [x] `bin/search.mjs` CLI(`--source` / `--since` / `--until` / `--sort` / `--limit` /
-      `--channels` / `--max-channels` / `--text`)
+- [x] `bin/search.mjs` CLI
 - [x] `check-setup.mjs` に横断検索の準備状況を表示
+- [x] **方針転換**: esa 検索は自前 `searchPosts` をやめ、esa 公式 MCP に置換(下記 Phase 1.5)。
+      `lib/search.mjs` は Calendar + Discord のみに縮小。
 - 既知の制約: Discord は Bot に閲覧権限のあるチャンネルのみ。学科の重要チャンネル
   (週報・ゼミアナウンス等)は Bot ロールへの権限付与が必要。期間未指定だと各チャンネル
   直近 100 件のみ。全文インデックスは無いので大規模検索は `--since` 前提。
 
-### Phase 2 — Slack 連携
-- [ ] Slack App 作成手順を README に追加(必要スコープ: `search:read` 等)
-- [ ] `scripts/lib/slack.mjs` + `bin` ラッパー
+### Phase 1.5 — esa 公式 MCP のバンドル ✅ (feat/esa-mcp)
+- [x] `.mcp.json` に `esa` サーバーを宣言
+- [x] `scripts/bin/esa-mcp.mjs` … `.env` の `ESA_ACCESS_TOKEN` を注入して `@esaio/esa-mcp-server` を起動
+- [x] `lib/esa.mjs` から `searchPosts` を削除(`getPost` / `getUser` は残す)
+- [x] `lib/search.mjs` / `bin/search.mjs` / `check-setup.mjs` から esa を除去
+- [x] README にバンドル MCP と Slack の説明を追加
+- 検証: MCP wrapper 経由で `initialize` / `tools/list` / `esa_search_posts` が動作(esa-mcp-server v0.14.0)
+
+### Phase 2 — Slack 連携(管理者承認が要る)
+- [ ] 学科 Slack 管理者に「Claude / Claude Code コネクタの承認」を打診
+- [ ] 承認 OK → `.mcp.json` に `slack`(`type: sse`, `url: https://mcp.slack.com/sse`)を追加
+- [ ] 承認 NG → 自前アプリ + ユーザートークン方式: `scripts/lib/slack.mjs`(`search.messages`) +
+      `bin/search.mjs` に `slack` ソースを復活、`.env` に `SLACK_USER_TOKEN`
+- [ ] どちらも不可 → 自前ボット + `conversations.history`(Bot を対象チャンネルに招待)
+- 参考スコープ(自前アプリ): user `search:read` / `users:read` / `channels:read`
 
 ### Phase 3 — スキル
 - [ ] `skills/find-schedule/`
@@ -112,6 +139,9 @@ esa にあるのか分からなくても、横断的に探して答える。イ�
 
 ## 未決事項
 
-- Drive / GitHub は公式 MCP を使うか自前実装か(依存ゼロ原則との兼ね合い)。
-- Slack は学科ワークスペースの管理者権限が必要(App 承認)。誰に依頼するか。
+- Drive / GitHub は公式 MCP を使う想定(esa と同じくバンドル + 起動ラッパ)。
+- Slack は学科ワークスペースの管理者承認が必要。公式 MCP 承認を打診中。
+  「AI agent」テンプレートは不可、「Starter app」は作成可だった(2026-08-30 ユーザー報告)。
+  Slack CLI も導入済みで検証に使える。
 - `search-vdslab/`(先行の叩き台、未検証)は参照用に残置。使える部分があれば取り込む。
+- `mcp-server/`(ChatGPT/Codex 向け)は esa/Slack MCP をカバーしない。ChatGPT パスの扱いは Phase 5 で再検討。

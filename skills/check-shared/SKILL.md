@@ -9,7 +9,7 @@ argument-hint: "<共有予定の URL またはトピック>"
 
 # 共有前の重複チェック
 
-> 🚧 **下書き**: 横断検索スクリプト(Phase 1〜2)が未実装。実装までは利用可能な MCP ツールで代替する。
+> 🚧 **下書き**(Phase 3)。Slack ステップは Slack MCP 接続後に有効。
 
 ## 目的
 
@@ -26,15 +26,21 @@ argument-hint: "<共有予定の URL またはトピック>"
 
 ### 2. esa を検索する
 
-URL / ベース URL / キーワードで esa を検索。一致記事の URL・タイトル・投稿者・日付を控える。
+esa 公式 MCP の `esa_search_posts`(`plugin:lab-assistant:esa`、`teamName` は `.env` の
+`ESA_DEFAULT_TEAM`)で URL / ベース URL / キーワードを検索。一致記事の URL・タイトル・投稿者・日付を控える。
 
 ### 3. Slack を検索する
 
-学科ワークスペースをキーワード / URL で検索。一致メッセージの permalink・チャンネル・投稿者・日付を控える。
+Slack MCP が接続されていれば、その検索ツールでキーワード / URL を検索。
+一致メッセージの permalink・チャンネル・投稿者・日付を控える。未接続ならスキップし回答に明記する。
 
 ### 4. Discord を検索する
 
-主要チャンネル(週報・共有・雑談など)を検索。一致メッセージのリンク・投稿者・日付を控える。
+```bash
+node "${CLAUDE_PLUGIN_ROOT}/scripts/bin/search.mjs" "<複合キーワード>" --source discord --since <90日前> --text
+```
+
+週報・共有・雑談などのチャンネルの一致メッセージのリンク・投稿者・日付を控える。
 
 ### 5. 「自分が過去に紹介済みか」を確認する(週報 Visualization 用)
 

@@ -1,9 +1,10 @@
 #!/usr/bin/env node
-// 研究室の各ソース (Google Calendar / esa / Discord) を横断検索する。
+// Google Calendar (ゼミ) と Discord を横断検索する。
+// esa / Slack / GitHub は公式 MCP 側で検索する (スキルが統合する)。
 //
 // 使い方:
 //   node search.mjs "中間報告会"
-//   node search.mjs "可視化 D3" --source esa,discord --since 2026-04-01 --limit 30
+//   node search.mjs "可視化 D3" --since 2026-04-01 --limit 30
 //   node search.mjs "ゼミ リスケ" --source discord --channels 123,456
 //   node search.mjs "週報" --text          # 人間向けの整形出力
 //   node search.mjs "発表会" --sort newest # 並び: relevance(既定) | newest | oldest
@@ -33,7 +34,7 @@ async function main() {
   const query = args._.join(" ").trim();
   if (!query) {
     process.stderr.write(
-      '検索キーワードを渡してください。例: node search.mjs "中間報告会" --source esa,discord\n' +
+      '検索キーワードを渡してください。例: node search.mjs "中間報告会" --since 2026-04-01\n' +
         `利用可能なソース: ${AVAILABLE_SOURCES.join(", ")}\n`
     );
     process.exit(2);

@@ -180,7 +180,7 @@ for (const r of results) {
 // 横断検索の準備状況 (任意機能なので合否には含めない)
 const readiness = sourceReadiness();
 process.stdout.write(
-  `\n横断検索 (node scripts/bin/search.mjs — Calendar / Slack / Discord / GitHub / Drive):\n`
+  `\n横断検索 (node scripts/bin/search.mjs — esa / Calendar / Slack / Discord / GitHub / Drive):\n`
 );
 for (const [src, s] of Object.entries(readiness)) {
   const mark = s.ready ? "✅" : "—";

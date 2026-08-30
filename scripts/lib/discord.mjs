@@ -244,6 +244,7 @@ function toDiscordHit(m, ch, terms) {
       channelId: ch.id,
       channelName: ch.name || null,
       messageId: m.id,
+      bot: !!m.author?.bot,
       isThread: SEARCHABLE_THREAD.has(ch.type),
       attachments: (m.attachments || []).length,
       urls: (m.embeds || []).map((e) => e.url).filter(Boolean),

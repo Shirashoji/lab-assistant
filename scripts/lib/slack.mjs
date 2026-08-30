@@ -95,3 +95,50 @@ export async function searchMessages(opts = {}) {
 
   return { hits, warnings, total: json.messages?.total ?? hits.length };
 }
+
+// ── ユーザー表示名の解決 (find-expert 用) ─────────────────────
+// search.messages の match には `username` が無いことがあり、その場合は生の
+// ユーザー ID (U01ABCDEF) しか手に入らない。ここで表示名に直す。
+// `users:read` スコープが無いワークスペースでは解決できないので、その場合は
+// 例外にせず null を返し、呼び出し側が ID のまま扱えるようにする。
+const userNameCache = new Map();
+
+/**
+ * Slack ユーザー ID → 表示名。解決できなければ null。
+ * @param {string} userId
+ */
+export async function resolveUserName(userId) {
+  const id = String(userId || "").trim();
+  if (!id) return null;
+  if (userNameCache.has(id)) return userNameCache.get(id);
+  let name = null;
+  try {
+    const json = await apiGet("users.info", { user: id });
+    const u = json.user || {};
+    name = u.profile?.display_name || u.profile?.real_name || u.real_name || u.name || null;
+  } catch {
+    // missing_scope / user_not_found などは「解決できなかった」として扱う
+    name = null;
+  }
+  userNameCache.set(id, name);
+  return name;
+}
+
+/**
+ * 複数のユーザー ID をまとめて表示名に解決する。
+ * @param {string[]} userIds
+ * @returns {Promise<Record<string, string>>} 解決できたものだけの id → 表示名
+ */
+export async function resolveUserNames(userIds) {
+  const ids = [...new Set((userIds || []).map((s) => String(s).trim()).filter(Boolean))];
+  const out = {};
+  // ユーザートークンのレート制限 (Tier 4) に配慮して 5 並列まで
+  for (let i = 0; i < ids.length; i += 5) {
+    const chunk = ids.slice(i, i + 5);
+    const names = await Promise.all(chunk.map((id) => resolveUserName(id)));
+    chunk.forEach((id, j) => {
+      if (names[j]) out[id] = names[j];
+    });
+  }
+  return out;
+}

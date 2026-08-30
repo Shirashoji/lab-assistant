@@ -11,6 +11,8 @@
 //   node find-expert.mjs "根付き木" --source discord,slack --limit 80
 //   esa MCP の結果を混ぜる (共通ヒット形の JSON 配列を標準入力から):
 //     cat esa-hits.json | node find-expert.mjs "MCP" --extra-hits - --text
+//   GitHub の code ヒットの著者補完を止める (リクエストを節約したいとき):
+//     node find-expert.mjs "d3" --no-enrich-code
 //   GitHub 連携などの Bot 投稿も含める:
 //     node find-expert.mjs "MCP" --include-bots
 //   同一人物の名寄せ:
@@ -27,7 +29,13 @@ function parseArgs(argv) {
   const out = { _: [] };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
-    if (a === "--text" || a === "--json" || a === "--no-resolve" || a === "--include-bots") {
+    if (
+      a === "--text" ||
+      a === "--json" ||
+      a === "--no-resolve" ||
+      a === "--include-bots" ||
+      a === "--no-enrich-code"
+    ) {
       out[a.slice(2)] = true;
     } else if (a.startsWith("--")) {
       const key = a.slice(2);
@@ -111,6 +119,9 @@ async function main() {
     calendarId: args.calendar,
     maxChannels: args["max-channels"] ? Number(args["max-channels"]) : undefined,
     maxPagesPerChannel: args.pages ? Number(args.pages) : undefined,
+    // 誰が書いたかが主題なので、code ヒットの著者補完は既定で有効にする
+    // (先頭 10 件だけ、1 件につき 1 リクエスト増える)。
+    enrichCode: !args["no-enrich-code"],
   });
 
   const hits = [...result.hits];

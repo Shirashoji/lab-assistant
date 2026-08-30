@@ -70,7 +70,7 @@ esa にあるのか分からなくても、横断的に探して答える。イ�
 - [x] GitHub Flow の運用ドキュメント(`docs/DEVELOPMENT.md`, PR テンプレート)
 - [x] ロードマップ(本ファイル)
 - [x] 検索系スキルの下書き(`skills/find-schedule/`, `skills/check-shared/`)
-- [ ] `chore/rename-internals` — コード内の識別子を `calendar-agent` → `lab-assistant` に統一
+- [x] `chore/rename-internals` — コード内の識別子を `calendar-agent` → `lab-assistant` に統一
       (`scripts/install.mjs` の MCP サーバー名 / marketplace 参照、`mcp-server/` 各所、
       User-Agent 文字列、`check-setup.mjs` のログ)
 - [ ] GitHub にリモートリポジトリを作成して push(ユーザー操作)

@@ -22,7 +22,7 @@ async function apiGet(path, { retry = 1, params } = {}) {
   const res = await fetch(`${API}${path}${qs}`, {
     headers: {
       Authorization: `Bearer ${token}`,
-      "User-Agent": "lab-assistant/0.1.0",
+      "User-Agent": "lab-assistant/0.2.0",
     },
   });
   if ((res.status === 429 || res.status >= 500) && retry > 0) {

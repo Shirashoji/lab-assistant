@@ -1,6 +1,6 @@
 {
   "name": "lab-assistant-mcp",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
   "description": "lab-assistant のロジックを MCP ツールとして公開する (ChatGPT / Codex / Claude Desktop など向け)",

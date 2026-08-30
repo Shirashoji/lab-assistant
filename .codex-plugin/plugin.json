@@ -1,7 +1,7 @@
 {
   "name": "lab-assistant",
-  "version": "0.1.0",
-  "description": "研究室の情報基盤 (Discord / Slack / esa / Google Calendar / Google Drive / GitHub) を横断検索・調査し、トピックに詳しい人を探し、必要ならゼミの Google Calendar に予定を追加する",
+  "version": "0.2.0",
+  "description": "研究室の情報基盤 (Discord / Slack / esa / Google Calendar / Google Drive / GitHub) を横断検索・調査し(関連語に自動展開)、トピックに詳しい人を探し、必要ならゼミの Google Calendar に予定を追加する",
   "author": { "name": "takuma" },
   "keywords": ["discord", "slack", "esa", "google-calendar", "google-drive", "github", "search", "research-lab"],
   "skills": "./skills/",

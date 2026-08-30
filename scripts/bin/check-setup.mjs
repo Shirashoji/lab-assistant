@@ -5,6 +5,7 @@ import { config, PLUGIN_ROOT } from "../lib/config.mjs";
 import { getUser as esaUser } from "../lib/esa.mjs";
 import { listCalendars } from "../lib/gcal.mjs";
 import { sourceReadiness } from "../lib/search.mjs";
+import { searchFiles } from "../lib/gdrive.mjs";
 
 const quiet = process.argv.includes("--quiet");
 const results = [];
@@ -52,6 +53,24 @@ async function checkSlack() {
   }
 }
 
+// Drive は任意機能。スコープ追加のため再認証が必要な状態がありうるので、
+// 合否 (results) には入れず「横断検索」欄に状態だけ出す。
+let driveStatus = null; // { ok:boolean, detail:string }
+
+async function checkDrive() {
+  if (!config.googleClientId || !config.googleClientSecret || !config.googleRefreshToken) return;
+  try {
+    // files.list を 1 件だけ叩いてスコープと疎通を確認する
+    const { hits } = await searchFiles({ query: "", limit: 1 });
+    driveStatus = {
+      ok: true,
+      detail: `drive.readonly スコープ OK (サンプル: ${hits[0]?.title || "ファイル 0 件"})`,
+    };
+  } catch (e) {
+    driveStatus = { ok: false, detail: e.message };
+  }
+}
+
 async function checkGoogle() {
   if (!config.googleClientId || !config.googleClientSecret) {
     return record("Google クライアント", false, "GOOGLE_CLIENT_ID/SECRET 未設定");
@@ -96,7 +115,7 @@ async function checkGoogle() {
   }
 }
 
-await Promise.all([checkDiscord(), checkEsa(), checkSlack(), checkGoogle()]);
+await Promise.all([checkDiscord(), checkEsa(), checkSlack(), checkGoogle(), checkDrive()]);
 
 const failed = results.filter((r) => !r.ok);
 
@@ -118,10 +137,15 @@ for (const r of results) {
 
 // 横断検索の準備状況 (任意機能なので合否には含めない)
 const readiness = sourceReadiness();
-process.stdout.write(`\n横断検索 (node scripts/bin/search.mjs — Calendar / Slack / Discord):\n`);
+process.stdout.write(
+  `\n横断検索 (node scripts/bin/search.mjs — Calendar / Slack / Discord / Drive):\n`
+);
 for (const [src, s] of Object.entries(readiness)) {
   const mark = s.ready ? "✅" : "—";
   process.stdout.write(`  ${mark} ${src}${s.ready ? "" : ` — ${s.reason}`}\n`);
+  if (src === "drive" && driveStatus) {
+    process.stdout.write(`      ${driveStatus.ok ? "✅" : "⚠"} ${driveStatus.detail}\n`);
+  }
 }
 const calReady = !!(config.googleClientId && config.googleClientSecret && config.googleRefreshToken);
 process.stdout.write(

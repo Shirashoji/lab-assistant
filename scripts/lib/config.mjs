@@ -114,6 +114,16 @@ export const config = {
     const n = Number(env("SEARCH_MAX_PAGES_PER_CHANNEL", "3"));
     return Number.isFinite(n) && n > 0 ? Math.min(n, 20) : 3;
   },
+
+  // ── Google Drive (Phase 4) ───────────────────────────────
+  /** 検索対象を絞るフォルダ ID (カンマ区切り)。未設定ならアクセスできる全ファイルが対象。 */
+  get driveFolderIds() {
+    return list("DRIVE_FOLDER_IDS");
+  },
+  /** 検索対象の MIME タイプを絞る場合 (カンマ区切り)。 */
+  get driveMimeTypes() {
+    return list("DRIVE_MIME_TYPES");
+  },
 };
 
 // Node 18+ (global fetch) を要求

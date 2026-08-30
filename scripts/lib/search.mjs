@@ -5,7 +5,8 @@
 //   - discord … Bot は検索 API 不可。直近メッセージを取得してフィルタする
 //   - calendar … ゼミカレンダー限定の期間 + キーワード検索
 //   - slack   … 自前アプリのユーザートークンで search.messages (管理者承認済み前提)
-// esa / GitHub / Drive は公式 MCP (.mcp.json でバンドル) 側で検索し、
+//   - drive   … Drive API v3 の files.list (fullText) を既存の Google OAuth で叩く
+// esa / GitHub は公式 MCP (.mcp.json でバンドル) 側で検索し、
 // スキルがそれらと本モジュールの結果をまとめる。
 //
 // すべてのソースは共通の「ヒット」形に正規化して返す:
@@ -19,9 +20,10 @@ import { config } from "./config.mjs";
 import { searchMessages as searchDiscord } from "./discord.mjs";
 import { searchMessages as searchSlack } from "./slack.mjs";
 import { searchEvents as searchCalendar } from "./gcal.mjs";
+import { searchFiles as searchDrive } from "./gdrive.mjs";
 
 /** このモジュールがコードとして検索できるソース。 */
-export const AVAILABLE_SOURCES = ["calendar", "slack", "discord"];
+export const AVAILABLE_SOURCES = ["calendar", "slack", "discord", "drive"];
 
 /** そのソースを検索する前提が整っているか (.env)。 */
 export function sourceReadiness() {
@@ -37,6 +39,10 @@ export function sourceReadiness() {
     discord: {
       ready: !!config.discordToken,
       reason: "DISCORD_BOT_TOKEN (対象は DISCORD_GUILD_IDS、未指定なら Bot の全参加ギルド)",
+    },
+    drive: {
+      ready: !!(config.googleClientId && config.googleClientSecret && config.googleRefreshToken),
+      reason: "Google OAuth (drive.readonly スコープ込みで auth-google.mjs を再実行)",
     },
   };
 }
@@ -82,6 +88,20 @@ const RUNNERS = {
           (forbiddenChannels ? ` ・権限無しで除外 ${forbiddenChannels} 件` : "") +
           (opts.since ? "" : " ・各チャンネル直近100件のみ(--since で期間指定可)")
         : undefined;
+    return { hits, warnings, coverage };
+  },
+  async drive(query, opts) {
+    const { hits, warnings, hasMore } = await searchDrive({
+      query,
+      since: opts.since,
+      until: opts.until,
+      limit: opts.limit,
+      folderIds: opts.folderIds?.length ? opts.folderIds : config.driveFolderIds,
+      mimeTypes: opts.mimeTypes?.length ? opts.mimeTypes : config.driveMimeTypes,
+    });
+    const coverage = hasMore
+      ? `上位 ${hits.length} 件のみ (--limit / --since で絞り込み可)`
+      : `${hits.length} 件`;
     return { hits, warnings, coverage };
   },
 };

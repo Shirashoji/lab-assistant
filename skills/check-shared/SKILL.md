@@ -2,8 +2,9 @@
 name: check-shared
 description: >-
   記事・データ可視化(Visualization)・ツール・論文などを研究室に共有する前に、すでに esa / Slack /
-  Discord で誰かが共有・議論していないか確認したいときに使う。毎週の週報で「今週見た面白い
-  Visualization」を紹介する前に、自分が過去に同じものを紹介していないかのチェックにも使う。
+  Discord / GitHub / Google Drive で誰かが共有・議論していないか確認したいときに使う。毎週の週報で
+  「今週見た面白い Visualization」を紹介する前に、自分が過去に同じものを紹介していないかの
+  チェックにも使う。
 argument-hint: "<共有予定の URL またはトピック>"
 ---
 
@@ -49,6 +50,23 @@ node "${CLAUDE_PLUGIN_ROOT}/scripts/bin/search.mjs" "<検索語>" --source disco
 週報・共有・可視化・雑談系のチャンネルのヒットを見る。`coverage` / `warnings` に
 「権限無しで除外 N 件」が出たら、見られていない範囲があることを回答に添える。
 
+### 4.5 GitHub / Google Drive も見る(該当しそうなときだけ)
+
+- **ツール・ライブラリ・実装**の共有なら GitHub を見る。すでに誰かが取り込んでいるかもしれない。
+
+  ```bash
+  node "${CLAUDE_PLUGIN_ROOT}/scripts/bin/search.mjs" "<検索語>" --source github --kinds issues,code --limit 20 --text
+  ```
+
+- **資料・スライド**の共有なら Drive を見る。
+
+  ```bash
+  node "${CLAUDE_PLUGIN_ROOT}/scripts/bin/search.mjs" "<検索語>" --source drive --since <SINCE> --limit 20 --text
+  ```
+
+どちらも未設定ならスキップされる(`skipped` に出る)。無理に全部見る必要はないが、
+**見なかったソースは回答に書く**こと。
+
 ### 5. 自分が過去に紹介済みかを確認する(週報 Visualization 用)
 
 トピックが「週報で紹介する Visualization」なら、手順 2〜4 のヒットの中に **自分の投稿**が無いかを
@@ -64,6 +82,8 @@ node "${CLAUDE_PLUGIN_ROOT}/scripts/bin/search.mjs" "<検索語>" --source disco
   > これは自分が 2026-05-30 の週報で紹介済みです(esa: 週報/2026/22/...)。別のネタが良さそうです。
 - **重複なし**:
   > esa / Slack / Discord(過去 <日数> 日)を確認しましたが見つかりませんでした。共有して大丈夫そうです。
+
+- **誰が詳しいか**まで知りたくなったら `find-expert` スキルに引き継ぐ。
 
 **見たソースと期間・範囲を必ず書く**。`SLACK_USER_TOKEN` 未設定などでスキップしたソースも明記する。
 

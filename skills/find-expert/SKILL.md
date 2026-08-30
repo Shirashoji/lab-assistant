@@ -107,5 +107,9 @@ node "${CLAUDE_PLUGIN_ROOT}/scripts/bin/find-expert.mjs" "<検索語>" \
 - カバレッジの既知の制約:
   - Discord は Bot に閲覧権限のあるチャンネルのみ (権限が無いチャンネル数は警告に出る)。
   - Slack は `SLACK_USER_TOKEN` の所有者が見えるチャンネルのみ。
-  - GitHub の code 検索は期間指定ができない。
+  - GitHub の code 検索は期間指定ができない。また code のヒットは著者・日付が API から返らないので
+    最新コミットから補完している(先頭 10 件まで)。
+    トークンの権限が足りずに GitHub が丸ごと落ちている場合は
+    `node ${CLAUDE_PLUGIN_ROOT}/scripts/bin/check-github-token.mjs` の実行を案内する
+    (詳細は `docs/GITHUB-TOKEN.md`)。
   - Drive は `drive.readonly` スコープが必要 (未許可なら `auth-google.mjs` の再実行を案内する)。

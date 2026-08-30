@@ -70,7 +70,13 @@ async function checkGitHub() {
     if (!res.ok) {
       return record("GitHub 接続", false, j.message || `HTTP ${res.status}`, true);
     }
-    record("GitHub 接続", true, `User: ${j.login} / レート制限残り: ${remaining}`, true);
+    record(
+      "GitHub 接続",
+      true,
+      `User: ${j.login} / レート制限残り: ${remaining}` +
+        " (機能ごとの可否は node scripts/bin/check-github-token.mjs)",
+      true
+    );
   } catch (e) {
     record("GitHub 接続", false, e.message, true);
   }

@@ -48,5 +48,6 @@ node "${CLAUDE_PLUGIN_ROOT}/scripts/bin/search.mjs" "<話題>" --source github -
 - ヒットが割れて決め手が無いときは、上位候補を複数提示する。
 - 権限が無くて見えていないチャンネルがある場合(`warnings` / `coverage` に出る)はその旨を添える。
 - `SLACK_USER_TOKEN` / `DISCORD_BOT_TOKEN` / `GITHUB_TOKEN` 未設定のソースはスキップされる。
-  回答に明記する。
+  回答に明記する。GitHub が権限エラーで落ちているときは
+  `node ${CLAUDE_PLUGIN_ROOT}/scripts/bin/check-github-token.mjs` を案内する。
 - 「その話題に詳しい人」を知りたい場合は `find-expert` スキルへ。

@@ -11,7 +11,8 @@
 | 機能 | 状態 |
 | --- | --- |
 | `add-event` — URL(Discord / esa)から予定を抽出 → 重複チェック → カレンダー作成 | ✅ 動作 |
-| esa 検索 — 公式 MCP `@esaio/esa-mcp-server` を `.mcp.json` でバンドル | ✅ 動作 |
+| esa 検索 — `search.mjs` が API を直接検索(MCP 不要)+ 公式 MCP `@esaio/esa-mcp-server` もバンドル | ✅ 動作 |
+| 関連語への自動展開 — 「ゼミ」で `seminar` / `研究会` の記事も拾う | ✅ 動作 |
 | 横断検索(Calendar / Slack / Discord / GitHub / Drive) — `scripts/bin/search.mjs` | ✅ 動作 |
 | スキル `find-schedule` / `check-shared` / `find-channel` / `search-lab` | ✅ 動作 |
 | スキル `find-expert` — トピックに詳しい人を根拠付きで探す — `scripts/bin/find-expert.mjs` | ✅ 動作 |
@@ -185,7 +186,10 @@ Discord や esa の他人が書いた本文を読み込む以上、プロンプ�
 GitHub と Google Drive は公式 MCP ではなく `scripts/lib/` の依存ゼロ実装で検索します
 (GitHub は REST search API + `GITHUB_TOKEN`、Drive は Calendar と同じ Google OAuth を再利用)。
 
-- **esa**: `esa_search_posts` の引数 `teamName` は `.env` の `ESA_DEFAULT_TEAM`(不明なら `esa_get_teams`)。
+- **esa**: 記事の検索・取得。`esa_search_posts` の引数 `teamName` は `.env` の `ESA_DEFAULT_TEAM`
+  (不明なら `esa_get_teams`)。**検索だけなら `scripts/bin/search.mjs --source esa` でも同じことができ、
+  そちらは MCP が無くても動く**ので、スキルは後者を使う。この MCP は記事の作成・更新など
+  検索以外の操作もしたいときに使う。
 - **seminar-calendar**: すべての操作が `.env` の `GOOGLE_CALENDAR_ID`(= ゼミカレンダー)に**固定**される。
   Claude アプリ標準の Google Calendar コネクタと混同しないための専用サーバー。予定の確認・追加は
   スキルがこのサーバー経由で行う(`bin/*.mjs` は bot / ChatGPT 用のフォールバック)。
@@ -200,12 +204,32 @@ Slack の**ワークスペース検索(`search.messages`)はユーザートー�
 
 ## 横断検索(`scripts/bin/search.mjs`)
 
-Calendar(ゼミ)/ Slack(学科)/ Discord / GitHub / Google Drive をまたいでキーワード検索し、共通形式
+esa / Calendar(ゼミ)/ Slack(学科)/ Discord / GitHub / Google Drive をまたいでキーワード検索し、共通形式
 (`source` / `title` / `url` / `snippet` / `author` / `timestamp`)の JSON を返します。
-esa はバンドル MCP 側で検索し、スキルが結果をまとめます。
+**esa もこのスクリプトが直接 API を叩くので、esa MCP が使えない環境(ChatGPT / Codex / Bot、
+MCP 未接続のセッション)でも esa を検索できます。**
+
+### 関連語への自動展開
+
+完全一致だけだと「ゼミ」と書かれた記事を「セミナー」で探して取りこぼします。そこでクエリを
+**関連語のグループ**に展開し、**グループ内は OR / グループ間は AND** で検索します。
+
+```
+"セミナー 日程"
+  → (セミナー OR ゼミ OR seminar OR 研究会) AND (日程 OR 予定 OR スケジュール OR schedule OR 日時)
+```
+
+展開は 2 段階で、辞書([`scripts/lib/expand.mjs`](scripts/lib/expand.mjs) の `SYNONYMS`。研究室の
+行事・可視化・技術まわりの言い換えと和英)と、機械的な表記ゆれ(長音・中黒・空白の有無、英語の複数形)です。
+`ml` や `viz` のような短い英字語は語境界で照合するので `html` には誤爆しません。
+実際に何へ展開されたかは `--text` の `関連語も検索:` 行と、JSON の `expansion` に出ます。
+並び順は**元の語そのものを含むヒットを、関連語だけのヒットより上**にします。
 
 ```bash
 node scripts/bin/search.mjs "中間報告会"
+node scripts/bin/search.mjs "中間報告" --source esa --text          # esa だけ (MCP 不要)
+node scripts/bin/search.mjs "ゼミ 日程" --related セミナー,研究会    # 関連語を足す
+node scripts/bin/search.mjs "https://example.com/x" --no-expand    # URL 検索は展開しない
 node scripts/bin/search.mjs "M2 中間報告" --source slack --text
 node scripts/bin/search.mjs "可視化 D3" --since 2026-04-01 --limit 30
 node scripts/bin/search.mjs "ゼミ リスケ" --source discord --channels 123,456
@@ -216,7 +240,10 @@ node scripts/bin/search.mjs "レイアウト" --source github --kinds discussion
 
 | オプション | 説明 |
 | --- | --- |
-| `--source a,b` | 検索対象。既定は設定済みの全ソース(`calendar,slack,discord,github,drive`) |
+| `--source a,b` | 検索対象。既定は設定済みの全ソース(`esa,calendar,slack,discord,github,drive`) |
+| `--related a,b` | 辞書に無い関連語・言い換えを足す(元のクエリと OR で結ばれる) |
+| `--no-expand` | 関連語への展開を止め、完全一致寄りに絞る(URL 検索など) |
+| `--team <name>` | esa のチーム名(既定は `ESA_DEFAULT_TEAM`) |
 | `--kinds a,b` | GitHub の検索種別。`issues`(既定)/ `code` / `commits` / `repos` / `discussions` |
 | `--enrich-code` | GitHub の code ヒットに著者と日付を補う(先頭 10 件・1 件につき 1 リクエスト増) |
 | `--since` / `--until` | 期間(`YYYY-MM-DD` か ISO8601) |
@@ -244,23 +271,28 @@ node scripts/bin/search.mjs "レイアウト" --source github --kinds discussion
 ```bash
 node scripts/bin/find-expert.mjs "MCP" --since 2025-01-01 --top 5 --text
 node scripts/bin/find-expert.mjs "トーラス" --source discord,slack --evidence 3 --text
-# esa MCP で検索した結果 (共通ヒット形の JSON) を混ぜる
-cat esa-hits.json | node scripts/bin/find-expert.mjs "根付き木" --extra-hits - --text
+# 辞書に無い言い換えを足す
+node scripts/bin/find-expert.mjs "根付き木" --related "rooted tree,木構造" --text
+# 外部で集めた結果 (共通ヒット形の JSON) を混ぜる
+cat other-hits.json | node scripts/bin/find-expert.mjs "根付き木" --extra-hits - --text
 ```
 
 | オプション | 説明 |
 | --- | --- |
 | `--top N` | 返す人数(既定 8) |
 | `--evidence N` | 1 人あたりの根拠件数(既定 5) |
-| `--extra-hits <path\|->` | esa など MCP 側の結果を共通ヒット形の JSON で混ぜる |
+| `--extra-hits <path\|->` | 外部で集めた結果を共通ヒット形の JSON で混ぜる |
+| `--related a,b` | 辞書に無い関連語・言い換えを足す |
+| `--no-expand` | 関連語への展開を止める |
 | `--alias "a=b,c=b"` | 表記ゆれの名寄せ |
 | `--include-bots` | GitHub 連携などの Bot 投稿も含める(既定は除外) |
 | `--no-enrich-code` | GitHub の code ヒットの著者補完を止める(既定は有効) |
 | `--half-life N` | 鮮度の半減期(日、既定 365) |
 | `--min-hits N` | 根拠がこの件数未満の人を落とす |
 
-スコアは **ソースの重み × 鮮度 × 検索語の濃さ**(+ 複数ソース出現ボーナス)の合計で、
-記事を書いている人 (esa 3.0) > コードや Issue (github 2.5) > 資料 (drive 2.0) >
+スコアは **ソースの重み × 鮮度 × 検索語の濃さ**(+ 複数ソース出現ボーナス)の合計です。
+**esa は既定の検索ソースに含まれます**(記事の著者が最も強い根拠なので外さないこと)。
+スコアは 記事を書いている人 (esa 3.0) > コードや Issue (github 2.5) > 資料 (drive 2.0) >
 発言 (discord / slack 1.0) > 予定 (calendar 0.4) の順に重く見ます。
 **あくまで機械的なヒント**なので、根拠を読んでから答えること(`skills/find-expert/` が
 その手順を持っています)。
@@ -320,7 +352,7 @@ node scripts/install.mjs status            # 導入状況
 | `bin/check-setup.mjs [--quiet]` | 設定と API 疎通の確認(横断検索の準備状況も表示) |
 | `bin/check-github-token.mjs [--org X] [--json]` | `GITHUB_TOKEN` で**どの検索機能まで使えるか**を実際に叩いて確認([docs/GITHUB-TOKEN.md](docs/GITHUB-TOKEN.md)) |
 
-実体は `scripts/lib/`(`search` / `experts` / `collect` / `dedupe` / `discord` / `esa` / `slack` / `github` / `gdrive` / `gcal` / `url` / `text` / `mcp-stdio` / `config`)。
+実体は `scripts/lib/`(`search` / `expand` / `experts` / `collect` / `dedupe` / `discord` / `esa` / `slack` / `github` / `gdrive` / `gcal` / `url` / `text` / `mcp-stdio` / `config`)。
 `bin/` は薄いラッパー。同じ `lib/` を `bot/`(任意の Discord Bot)と `mcp-server/`(任意の MCP サーバー)も共有します。
 
 ## 追加コンポーネント

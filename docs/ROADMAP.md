@@ -116,6 +116,9 @@ esa にあるのか分からなくても、横断的に探して答える。イ�
 - [x] `lib/search.mjs` / `bin/search.mjs` / `check-setup.mjs` から esa を除去
 - [x] README にバンドル MCP と Slack の説明を追加
 - 検証: MCP wrapper 経由で `initialize` / `tools/list` / `esa_search_posts` が動作(esa-mcp-server v0.14.0)
+- ⚠ **この「置換」は Phase 6 で撤回した**(下記)。MCP が使えないセッション
+  (ChatGPT / Codex / Bot / MCP 未接続)で esa だけ検索できなくなる、という実害が出たため。
+  現在は「`search.mjs` が API を直接叩く(既定)+ MCP も併存」の形。
 
 ### Phase 2 — Slack 連携 ✅ (feat/slack-search)
 - 判断: 公式 MCP はワークスペース管理者の承認が必要 → **自前アプリ + ユーザートークン方式**を採用
@@ -244,4 +247,55 @@ Docker / リモート前提で `.env` 一元管理と噛み合わず、Drive は
   トークン失効時は slack-app を再インストールして `SLACK_USER_TOKEN` を差し替える。
   重複アプリ `A0BTQ73GE57`(`--environment local` で試した残骸)は `slack app delete` で掃除可。
 - `search-vdslab/`(先行の叩き台、未検証)は参照用に残置。使える部分があれば取り込む。
-- `mcp-server/`(ChatGPT/Codex 向け)は esa/Slack MCP をカバーしない。ChatGPT パスの扱いは Phase 5 で再検討。
+- ~~`mcp-server/`(ChatGPT/Codex 向け)は esa/Slack MCP をカバーしない~~ → Phase 6 で esa は解決
+  (`search_lab` / `find_expert` の既定ソースに含まれる)。Slack は自前実装なので元から動く。
+
+## Phase 6 — esa の MCP 非依存化と関連語検索 ✅ (feat/esa-search-expand)
+
+### 背景
+- 「esa 検索はこのセッションでは直接使えない」と言われる事象。原因は Phase 1.5 の方針転換で、
+  esa の検索経路が **公式 MCP だけ** になっていたこと。MCP が繋がらない/読み込まれない環境
+  (ChatGPT / Codex、Discord Bot、MCP 未接続や接続途中のセッション)では esa が丸ごと欠落し、
+  スキルもドキュメントも「esa は MCP 側で」と書いてあるため代替手段が無かった。
+- 検索が完全一致 AND のみで、「セミナー 日程」と書くと esa 側で 2 件しかヒットしない
+  (実際の記事は「ゼミ」「スケジュール」と書かれている)。
+
+### やったこと
+- [x] `lib/esa.mjs` に `searchPosts` を**復活**(esa API v1 `/teams/{team}/posts?q=`)。
+      `getPost` / `getUser` はそのまま。MCP も消さず併存させる(記事作成など検索以外に使う)。
+- [x] `lib/search.mjs` に `esa` ソースを追加し、**既定ソースの先頭**に入れた。
+- [x] `lib/expand.mjs`(新規)… クエリを関連語グループに展開する。
+      グループ内 OR / グループ間 AND。辞書(研究室の行事・可視化・技術の言い換えと和英)+
+      機械的な表記ゆれ(長音・中黒・空白、英語の複数形)の 2 段階。
+- [x] `lib/text.mjs` に `matchesGroups` / `scoreGroups` / `groupTerms` を追加。
+      `ml` `viz` のような英数字 4 文字以下の語は**語境界で照合**する(`ml` が `html` に誤爆するため)。
+- [x] 各ソースに展開を配線: esa / slack / github は API の OR クエリに、drive は
+      `(fullText contains A or B) and (...)` に、discord はローカルのグループ照合に。
+- [x] calendar は `q` をやめて期間内を取り切ってからローカル照合に変更。
+      これに伴い `listEvents` に **ページネーションを追加**(従来 `maxResults: 50` 打ち切りで、
+      `q` を外すと静かに取りこぼす状態だった)。照合は**切り詰め前の生イベント**に対して行う
+      (`eventToHit` が description を 200 字に切るため)。
+- [x] 並び順: 元の語そのものを含むヒットを、関連語だけのヒットより上に出す(`score`)。
+- [x] `--related` / `--no-expand` / `--team` を `search.mjs` と `find-expert.mjs` に追加。
+- [x] `mcp-server`(Claude Desktop / ChatGPT)の `search_lab` / `find_expert` にも
+      `esa` ソースと `expand` / `relatedTerms` を追加。
+- [x] スキル 4 本(search-lab / find-schedule / check-shared / find-expert)を
+      「esa MCP を呼ぶ」から「`search.mjs --source esa`」に書き換え。
+- [x] README / CHATGPT.md の「esa は MCP 側で検索」という記述を訂正。
+
+### 検証 (2026-08-30、実データ)
+- `search.mjs "中間報告" --source esa` → 148 件中から中間発表の議事録・ガイダンスがヒット。
+- `"セミナー 日程"`: 展開なし 2 件(無関係な自己紹介)→ 展開あり 592 件、上位は実際の
+  スケジュール記事・議事録。
+- calendar: 展開ありのローカル照合 43 件 = 従来の `q` 43 件(ページネーション修正後に一致)。
+- 語境界: `機械学習` の `ml` 変種が `index.html` に誤爆しないことを確認。
+- MCP 3 種(esa / seminar-calendar / mcp-server)すべて `initialize` → `tools/list` 応答を確認。
+  `mcp-server` の `search_lab` を実呼び出しし、`searched: [calendar, esa]` を確認。
+
+### 残っている制約
+- 辞書は研究室ドメインに手で書いたもの。新しい言い換えが増えたら `SYNONYMS` に足す
+  (無関係な語を入れるとノイズになるので、実際にその語で書かれた記事がある語だけにする)。
+- 展開は再現率を上げる代わりに精度を下げる。週報テンプレの定型文("面白いと感じた Viz")が
+  全員の週報に入っているため、`可視化` 系の find-expert は今も定型文ヒットを拾う。
+  スキル側で「単に単語が出てくるだけの人を落とす」手順を踏む前提は変わらない。
+- GitHub は `GITHUB_TOKEN` 未設定のためこのマシンでは未検証(スキップされる)。

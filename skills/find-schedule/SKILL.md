@@ -9,7 +9,7 @@ argument-hint: "<探したいイベント(例: 中間報告会)>"
 
 # 研究室イベントの日程を横断検索する
 
-> 🚧 **下書き**: 検索用スクリプト(Phase 1〜2)が未実装。実装までは利用可能な MCP ツールで代替する。
+> 🚧 **下書き**(Phase 3)。Slack ステップは Slack MCP 接続後に有効。
 > 全体像は [docs/ROADMAP.md](../../docs/ROADMAP.md)。
 
 ## 目的
@@ -26,23 +26,30 @@ argument-hint: "<探したいイベント(例: 中間報告会)>"
 ### 2. ゼミの Google Calendar を最優先で確認する
 
 ```bash
-node "${CLAUDE_PLUGIN_ROOT}/scripts/bin/list-calendars.mjs"   # 対象カレンダーの確認(初回のみ)
+node "${CLAUDE_PLUGIN_ROOT}/scripts/bin/search.mjs" "<イベント名>" --source calendar --text
 ```
 
-`scripts/lib/gcal.mjs` の期間検索(実装後は `bin/search.mjs --source calendar`)で、キーワードに
-一致する直近の予定を探す。**必ずプラグイン同梱の経路を使う**(Claude アプリ標準の Google Calendar
-コネクタではなく、`.env` の `GOOGLE_CALENDAR_ID` = ゼミカレンダーを見る)。
+`search.mjs` の calendar ソースは `.env` の `GOOGLE_CALENDAR_ID`(= ゼミカレンダー)だけを見る。
+**Claude アプリ標準の Google Calendar コネクタは使わない**(別カレンダーを見てしまうため)。
 
 - 見つかった → 日時・タイトル・場所・説明を控える。手順 5 へ。
 
 ### 3. esa の議事録を確認する
 
-「次回ゼミ」「議事録」「<イベント名>」などで esa を検索し、直近記事の「次回の予定」記述を探す。
+esa 公式 MCP のツール `esa_search_posts`(`plugin:lab-assistant:esa`)で
+「次回ゼミ」「議事録」「<イベント名>」などを検索する。`teamName` は `.env` の
+`ESA_DEFAULT_TEAM`(不明なら `esa_get_teams` で確認)。直近記事の「次回の予定」記述を探す。
 
 ### 4. Discord / Slack の直近アナウンスを確認する
 
-リスケや変更連絡が直前に出ている可能性がある。「<イベント名>」「日程」「リスケ」等で
-Discord と Slack(学科ワークスペース)を検索する。学科の予定は Slack 側にあることも多い。
+リスケや変更連絡が直前に出ている可能性がある。
+
+```bash
+node "${CLAUDE_PLUGIN_ROOT}/scripts/bin/search.mjs" "<イベント名> 日程 リスケ" --source discord --since <60日前> --text
+```
+
+Slack MCP が接続されていれば、その検索ツールでも「<イベント名>」「日程」を調べる
+(学科の予定は Slack 側にあることも多い)。未接続ならスキップし、その旨を回答に明記する。
 
 ### 5. 統合して回答する
 

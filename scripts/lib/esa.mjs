@@ -1,6 +1,9 @@
 // esa API v1 の薄いラッパ。依存ゼロ。
+//
+// 記事の全文検索は esa 公式 MCP サーバー (@esaio/esa-mcp-server, .mcp.json で
+// バンドル) の `esa_search_posts` を使う。ここに残すのは add-event フローで
+// 必要な「URL → 記事 1 件の取得」(getPost) と疎通確認 (getUser) のみ。
 import { config } from "./config.mjs";
-import { excerpt, tokenize } from "./text.mjs";
 
 const API = "https://api.esa.io/v1";
 
@@ -33,57 +36,6 @@ async function apiGet(path, { retry = 1 } = {}) {
 
 export async function getUser() {
   return apiGet(`/user`);
-}
-
-// ── 横断検索 (Phase 1) ─────────────────────────────────────
-
-/**
- * esa の記事を全文検索する。
- * @param {{team?:string, q:string, perPage?:number, page?:number,
- *          since?:string, until?:string, limit?:number}} opts
- * @returns {Promise<{hits:object[], totalCount:number, warnings:string[]}>}
- */
-export async function searchPosts(opts = {}) {
-  const { q, perPage = 20, page = 1, since, until, limit = 20 } = opts;
-  const team = opts.team || config.esaDefaultTeam;
-  const warnings = [];
-  if (!team) {
-    throw new Error(
-      "esa の検索にはチーム名が必要です。.env の ESA_DEFAULT_TEAM を設定してください。"
-    );
-  }
-
-  // esa の検索クエリに更新日の下限を足す (since があれば)
-  const parts = [q];
-  if (since) parts.push(`updated:>${String(since).slice(0, 10)}`);
-  if (until) parts.push(`updated:<${String(until).slice(0, 10)}`);
-  const query = parts.filter(Boolean).join(" ");
-
-  const params = new URLSearchParams({
-    q: query,
-    per_page: String(Math.min(perPage, 100)),
-    page: String(page),
-    sort: "updated",
-    order: "desc",
-  });
-  const json = await apiGet(`/teams/${encodeURIComponent(team)}/posts?${params}`);
-  const terms = tokenize(q);
-  const hits = (json.posts || []).slice(0, limit).map((p) => ({
-    source: "esa",
-    title: p.full_name || p.name,
-    url: p.url,
-    snippet: excerpt(p.body_md || "", terms),
-    author: p.updated_by?.screen_name || p.created_by?.screen_name || null,
-    timestamp: p.updated_at || p.created_at || null,
-    extra: {
-      number: p.number,
-      category: p.category || null,
-      tags: p.tags || [],
-      wip: !!p.wip,
-      team,
-    },
-  }));
-  return { hits, totalCount: json.total_count ?? hits.length, warnings };
 }
 
 /**

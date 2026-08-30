@@ -1,24 +1,25 @@
 // 研究室の各ソースを横断検索する共通ロジック。依存ゼロ。
 // bin/search.mjs と (将来) mcp-server / スキルから使う。
 //
+// ここでコードとして検索するのは「公式 MCP が無い / 精密な制御が要る」ソースだけ:
+//   - discord … Bot は検索 API 不可。直近メッセージを取得してフィルタする
+//   - calendar … ゼミカレンダー限定の期間 + キーワード検索
+// esa / Slack / GitHub / Drive は公式 MCP (.mcp.json でバンドル) 側で検索し、
+// スキルがそれらと本モジュールの結果をまとめる。
+//
 // すべてのソースは共通の「ヒット」形に正規化して返す:
 //   {
-//     source: "discord" | "esa" | "calendar" | "slack" | "drive" | "github",
-//     title: string,
-//     url: string | null,
-//     snippet: string,
-//     author: string | null,
-//     timestamp: string | null,   // ISO8601
-//     extra: object               // ソース固有の付加情報
+//     source: "discord" | "calendar" | ...,
+//     title, url, snippet, author, timestamp,   // timestamp は ISO8601
+//     extra: object                              // ソース固有の付加情報
 //   }
 
 import { config } from "./config.mjs";
 import { searchMessages as searchDiscord } from "./discord.mjs";
-import { searchPosts as searchEsa } from "./esa.mjs";
 import { searchEvents as searchCalendar } from "./gcal.mjs";
 
-/** 現時点で実装済みのソース。 */
-export const AVAILABLE_SOURCES = ["calendar", "esa", "discord"];
+/** このモジュールがコードとして検索できるソース。 */
+export const AVAILABLE_SOURCES = ["calendar", "discord"];
 
 /** そのソースを検索する前提が整っているか (.env)。 */
 export function sourceReadiness() {
@@ -27,17 +28,10 @@ export function sourceReadiness() {
       ready: !!(config.googleClientId && config.googleClientSecret && config.googleRefreshToken),
       reason: "GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET / GOOGLE_REFRESH_TOKEN",
     },
-    esa: {
-      ready: !!(config.esaToken && config.esaDefaultTeam),
-      reason: "ESA_ACCESS_TOKEN と ESA_DEFAULT_TEAM",
-    },
     discord: {
       ready: !!config.discordToken,
       reason: "DISCORD_BOT_TOKEN (対象は DISCORD_GUILD_IDS、未指定なら Bot の全参加ギルド)",
     },
-    slack: { ready: false, reason: "未実装 (Phase 2)" },
-    drive: { ready: false, reason: "未実装 (Phase 4)" },
-    github: { ready: false, reason: "未実装 (Phase 4)" },
   };
 }
 
@@ -48,15 +42,6 @@ const RUNNERS = {
       since: opts.since,
       until: opts.until,
       calendarId: opts.calendarId,
-    });
-    return { hits, warnings };
-  },
-  async esa(query, opts) {
-    const { hits, warnings } = await searchEsa({
-      q: query,
-      since: opts.since,
-      until: opts.until,
-      limit: opts.limit,
     });
     return { hits, warnings };
   },

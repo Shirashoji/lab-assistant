@@ -3,14 +3,16 @@
 //
 // Calendar (ゼミ) / Slack (学科) / Discord をコードで検索し、投稿者ごとに畳み込んで
 // 「詳しそうな人」を根拠 (投稿・記事のリンク) 付きで返す。
-// esa / GitHub / Drive など公式 MCP 側で検索したヒットは --extra-hits で混ぜられる。
+// esa も含めて検索するので追加ツールは不要。外部で集めたヒットは --extra-hits で混ぜられる。
+// クエリは関連語に自動展開される (--no-expand で無効、--related で関連語を追加)。
 //
 // 使い方:
 //   node find-expert.mjs "MCP"
 //   node find-expert.mjs "トーラス" --since 2024-04-01 --top 5 --text
 //   node find-expert.mjs "根付き木" --source discord,slack --limit 80
 //   esa MCP の結果を混ぜる (共通ヒット形の JSON 配列を標準入力から):
-//     cat esa-hits.json | node find-expert.mjs "MCP" --extra-hits - --text
+//     cat other-hits.json | node find-expert.mjs "MCP" --extra-hits - --text
+//   node find-expert.mjs "可視化" --related ビジュアライゼーション,viz --text
 //   GitHub の code ヒットの著者補完を止める (リクエストを節約したいとき):
 //     node find-expert.mjs "d3" --no-enrich-code
 //   GitHub 連携などの Bot 投稿も含める:
@@ -34,7 +36,8 @@ function parseArgs(argv) {
       a === "--json" ||
       a === "--no-resolve" ||
       a === "--include-bots" ||
-      a === "--no-enrich-code"
+      a === "--no-enrich-code" ||
+      a === "--no-expand"
     ) {
       out[a.slice(2)] = true;
     } else if (a.startsWith("--")) {
@@ -103,13 +106,15 @@ async function main() {
     process.stderr.write(
       'トピックを渡してください。例: node find-expert.mjs "MCP" --since 2025-01-01 --text\n' +
         `コードで検索できるソース: ${AVAILABLE_SOURCES.join(", ")}\n` +
-        "(esa / その他 MCP 側の結果は --extra-hits で混ぜてください)\n"
+        "(外部で集めた結果は --extra-hits で混ぜられます)\n"
     );
     process.exit(2);
   }
 
   const result = await searchAll(query, {
     sources: args.source ? args.source.split(/[,\s]+/).filter(Boolean) : undefined,
+    expand: !args["no-expand"],
+    relatedTerms: args.related ? args.related.split(/[,\s]+/).filter(Boolean) : undefined,
     since: args.since,
     until: args.until,
     // 人物ごとに畳み込むので、検索そのものは広めに取る

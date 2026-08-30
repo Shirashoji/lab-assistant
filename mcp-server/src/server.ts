@@ -14,7 +14,7 @@ const json = (data: unknown) => ({
 export function makeServer(): McpServer {
   const server = new McpServer({
     name: "lab-assistant",
-    version: "0.1.0",
+    version: "0.2.0",
   });
 
   server.registerTool(
@@ -99,17 +99,26 @@ export function makeServer(): McpServer {
     {
       title: "研究室の情報基盤を横断検索",
       description:
-        "Google Calendar (ゼミ) / Slack (学科) / Discord / GitHub / Google Drive を横断して検索する。" +
-        "esa は別サーバー (esa MCP) 側で検索すること。" +
+        "esa / Google Calendar (ゼミ) / Slack (学科) / Discord / GitHub / Google Drive を横断して検索する。" +
+        "クエリは関連語に自動展開される (「ゼミ」→ セミナー / seminar / 研究会。グループ内 OR / グループ間 AND)ので、" +
+        "完全一致にこだわらず自然な言葉で検索してよい。展開内容は結果の expansion に入る。" +
         "結果は共通形のヒット (source / title / url / snippet / author / timestamp / extra) と、" +
         "searched / skipped / coverage / warnings を返すので、回答には必ず出典 URL と" +
         "「見た範囲」を添えること。",
       inputSchema: {
-        query: z.string().describe("検索キーワード。略称・言い換えは呼び出し側で複数回試すこと"),
+        query: z.string().describe("検索キーワード。関連語は自動で補われる"),
         sources: z
-          .array(z.enum(["calendar", "slack", "discord", "github", "drive"]))
+          .array(z.enum(["esa", "calendar", "slack", "discord", "github", "drive"]))
           .optional()
           .describe("検索するソース。省略時は設定済みの全ソース"),
+        expand: z
+          .boolean()
+          .optional()
+          .describe("関連語への展開 (既定 true)。false で完全一致寄りに絞る"),
+        relatedTerms: z
+          .array(z.string())
+          .optional()
+          .describe("追加で試したい関連語・言い換え。元のクエリと OR で結ばれる"),
         since: z.string().optional().describe("この日以降 (YYYY-MM-DD)。省略時はソースごとの既定"),
         until: z.string().optional().describe("この日まで (YYYY-MM-DD)"),
         limit: z.number().int().min(1).max(200).optional().describe("最大ヒット数 (既定 40)"),
@@ -131,7 +140,7 @@ export function makeServer(): McpServer {
       },
       annotations: { readOnlyHint: true, openWorldHint: true },
     },
-    async ({ query, sources, since, until, limit, sort, channels, kinds, enrichCode }) => {
+    async ({ query, sources, since, until, limit, sort, channels, kinds, enrichCode, expand, relatedTerms }) => {
       const result = await core.searchLab(query, {
         sources,
         since,
@@ -141,6 +150,8 @@ export function makeServer(): McpServer {
         channels,
         kinds,
         enrichCode,
+        expand,
+        relatedTerms,
       });
       return json(result);
     }
@@ -151,15 +162,15 @@ export function makeServer(): McpServer {
     {
       title: "トピックに詳しい人を探す",
       description:
-        "あるトピック (例 MCP / トーラス / 根付き木) について、Slack / Discord / GitHub / Drive / Calendar を" +
+        "あるトピック (例 MCP / トーラス / 根付き木) について、esa / Slack / Discord / GitHub / Drive / Calendar を" +
         "横断検索し、投稿者ごとに畳み込んで「詳しそうな人」を根拠 (投稿・記事のリンク) 付きで返す。" +
-        "esa の記事は最も強い根拠になるので、esa MCP で検索した結果を extraHits に共通ヒット形で渡すこと。" +
+        "esa も含めて検索するので追加のツールは不要 (extraHits は他の情報源を混ぜたいときだけ使う)。" +
         "score は機械的なヒントに過ぎない。必ず evidence の中身を読み、" +
         "「単に単語が出てくるだけ」の人は落としてから答えること。",
       inputSchema: {
         query: z.string().describe("詳しい人を探したいトピック"),
         sources: z
-          .array(z.enum(["calendar", "slack", "discord", "github", "drive"]))
+          .array(z.enum(["esa", "calendar", "slack", "discord", "github", "drive"]))
           .optional()
           .describe("検索するソース。省略時は設定済みの全ソース"),
         since: z
@@ -182,7 +193,7 @@ export function makeServer(): McpServer {
         extraHits: z
           .array(
             z.object({
-              source: z.string().describe('ソース名。esa MCP の結果なら "esa"'),
+              source: z.string().describe('ソース名 (例 "esa")'),
               title: z.string().nullable().optional(),
               url: z.string().nullable().optional(),
               snippet: z.string().nullable().optional(),
@@ -191,7 +202,7 @@ export function makeServer(): McpServer {
             })
           )
           .optional()
-          .describe("esa など他の MCP で検索した結果を共通ヒット形で混ぜる"),
+          .describe("他の MCP・外部で集めた結果を共通ヒット形で混ぜたいときだけ使う"),
       },
       annotations: { readOnlyHint: true, openWorldHint: true },
     },

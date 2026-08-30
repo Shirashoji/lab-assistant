@@ -4,7 +4,8 @@
 // Discussions だけは REST search に無いので GraphQL (POST /graphql) を使う。
 // どちらも lib/search.mjs の共通ヒット形に正規化して返す。
 import { config } from "./config.mjs";
-import { excerpt, tokenize } from "./text.mjs";
+import { excerpt, tokenize, groupTerms } from "./text.mjs";
+import { groupsToQuery } from "./expand.mjs";
 
 const API = "https://api.github.com";
 const DEFAULT_KINDS = ["issues", "code"];
@@ -365,8 +366,11 @@ const SEARCHES = {
  * @returns {Promise<{hits:object[], warnings:string[], total:number}>}
  */
 export async function searchGitHub(opts = {}) {
-  const { query, since, until, orgs = [], repos = [] } = opts;
-  const terms = tokenize(query);
+  const { since, until, orgs = [], repos = [] } = opts;
+  // 関連語グループがあれば GitHub の OR 検索に落とす
+  const groups = opts.groups?.length ? opts.groups : null;
+  const query = groups ? groupsToQuery(groups, { or: "OR", maxVariants: 5 }) : opts.query;
+  const terms = groups ? groupTerms(groups) : tokenize(opts.query);
   if (terms.length === 0) throw new Error("検索キーワードが空です");
 
   const warnings = [];

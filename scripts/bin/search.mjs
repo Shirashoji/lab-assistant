@@ -1,6 +1,8 @@
 #!/usr/bin/env node
-// Google Calendar (ゼミ) / Slack (学科) / Discord / GitHub / Google Drive を横断検索する。
-// esa は公式 MCP 側で検索する (スキルが統合する)。
+// esa / Google Calendar (ゼミ) / Slack (学科) / Discord / GitHub / Google Drive を横断検索する。
+//
+// クエリは関連語に自動展開される (「ゼミ」→ ゼミ / セミナー / seminar / 研究会)。
+// グループ内は OR、グループ間は AND。完全一致寄りに戻したいときは --no-expand。
 //
 // 使い方:
 //   node search.mjs "中間報告会"
@@ -12,6 +14,9 @@
 //   node search.mjs "d3" --source github --kinds code --enrich-code --text  # code に著者/日付を補完
 //   node search.mjs "研究会 スライド" --source drive --limit 10   # Google Drive の資料
 //   node search.mjs "スライド" --source drive --drive <共有ドライブ ID>  # .env の DRIVE_ID を上書き
+//   node search.mjs "中間報告" --source esa --text   # esa だけ (MCP 不要)
+//   node search.mjs "ゼミ 日程" --related セミナー,研究会  # 関連語を足す
+//   node search.mjs "中間報告会" --no-expand    # 展開せず完全一致寄りに
 //   node search.mjs "週報" --text          # 人間向けの整形出力
 //   node search.mjs "発表会" --sort newest # 並び: relevance(既定) | newest | oldest
 //
@@ -22,7 +27,7 @@ function parseArgs(argv) {
   const out = { _: [] };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
-    if (a === "--text" || a === "--json" || a === "--enrich-code") {
+    if (a === "--text" || a === "--json" || a === "--enrich-code" || a === "--no-expand") {
       out[a.slice(2)] = true;
     } else if (a.startsWith("--")) {
       const key = a.slice(2);
@@ -59,6 +64,9 @@ async function main() {
     maxPagesPerChannel: args.pages ? Number(args.pages) : undefined,
     kinds: args.kinds ? args.kinds.split(/[,\s]+/).filter(Boolean) : undefined,
     enrichCode: !!args["enrich-code"],
+    expand: !args["no-expand"],
+    relatedTerms: args.related ? args.related.split(/[,\s]+/).filter(Boolean) : undefined,
+    team: args.team,
   });
 
   if (args.text) {

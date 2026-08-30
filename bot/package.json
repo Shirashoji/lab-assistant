@@ -1,6 +1,6 @@
 {
   "name": "lab-assistant-bot",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
   "description": "返信に Bot をメンションすると lab-assistant スキルを実行する Discord Bot",

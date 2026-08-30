@@ -131,4 +131,4 @@ const tools = [
   },
 ];
 
-runMcpServer({ name: "seminar-calendar", version: "0.1.0", tools });
+runMcpServer({ name: "seminar-calendar", version: "0.2.0", tools });

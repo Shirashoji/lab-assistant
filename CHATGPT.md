@@ -94,7 +94,7 @@ ChatGPT に渡すエンドポイントは **`https://xxxx-xxxx.trycloudflare.com
    | `collect_context` | Discord / esa の URL から予定抽出用の文脈を集める |
    | `find_duplicate_events` | ゼミカレンダーの重複候補を返す |
    | `create_event` | ゼミカレンダーに予定を作成(書き込み) |
-   | `search_lab` | Calendar / Slack / Discord / GitHub / Drive を横断検索 |
+   | `search_lab` | esa / Calendar / Slack / Discord / GitHub / Drive を横断検索(関連語に自動展開) |
    | `find_expert` | トピックに詳しい人を根拠付きで推定 |
    | `list_search_sources` | 使えるソースと `.env` の準備状況 |
 
@@ -138,9 +138,9 @@ ChatGPT の動き:
 3. 返ってきた `hits` / `evidence` の URL を出典として添え、`searched` / `skipped` /
    `coverage` から「見た範囲」を明示する
 
-> esa はこの MCP サーバーには載っていません(Claude Code / Claude Desktop 側の
-> バンドル MCP で検索します)。ChatGPT から esa の記事も根拠に混ぜたい場合は、
-> `find_expert` の `extraHits` に共通ヒット形で渡してください。
+> **esa もこのサーバーから検索できます**(`search_lab` / `find_expert` の既定ソースに
+> 含まれます)。esa MCP は不要で、`.env` の `ESA_ACCESS_TOKEN` / `ESA_DEFAULT_TEAM` だけで動きます。
+> `extraHits` は、それ以外の外部で集めた結果を混ぜたいときにだけ使ってください。
 
 ---
 

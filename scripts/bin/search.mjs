@@ -11,6 +11,7 @@
 //   node search.mjs "レイアウト" --source github --kinds discussions --text
 //   node search.mjs "d3" --source github --kinds code --enrich-code --text  # code に著者/日付を補完
 //   node search.mjs "研究会 スライド" --source drive --limit 10   # Google Drive の資料
+//   node search.mjs "スライド" --source drive --drive <共有ドライブ ID>  # .env の DRIVE_ID を上書き
 //   node search.mjs "週報" --text          # 人間向けの整形出力
 //   node search.mjs "発表会" --sort newest # 並び: relevance(既定) | newest | oldest
 //
@@ -53,6 +54,7 @@ async function main() {
     sort: args.sort,
     channels: args.channels ? args.channels.split(/[,\s]+/).filter(Boolean) : undefined,
     calendarId: args.calendar,
+    driveId: args.drive,
     maxChannels: args["max-channels"] ? Number(args["max-channels"]) : undefined,
     maxPagesPerChannel: args.pages ? Number(args.pages) : undefined,
     kinds: args.kinds ? args.kinds.split(/[,\s]+/).filter(Boolean) : undefined,

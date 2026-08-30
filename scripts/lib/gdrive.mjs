@@ -6,6 +6,7 @@
 // 持っていないので、その場合は `node scripts/bin/auth-google.mjs` を再実行して
 // トークンを取り直す必要がある (403 のときに日本語でその旨を投げる)。
 import { getAccessToken } from "./gcal.mjs";
+import { config } from "./config.mjs";
 
 const DRIVE_API = "https://www.googleapis.com/drive/v3";
 
@@ -108,6 +109,13 @@ function driveError(status, json, raw) {
         "--limit を小さくして検索範囲を狭めてください。"
     );
   }
+  if (status === 404 && hay.includes("notfound")) {
+    return new Error(
+      "Drive の対象が見つかりません (404)。.env の DRIVE_ID / DRIVE_FOLDER_IDS が正しいか、" +
+        "OAuth に使った Google アカウントがその共有ドライブのメンバーかを確認してください " +
+        "(ID は `node scripts/bin/list-drives.mjs` で調べられます)。"
+    );
+  }
   if (status === 401) {
     return new Error(
       "Google の認証に失敗しました (401)。GOOGLE_REFRESH_TOKEN が失効している可能性があります。" +
@@ -174,8 +182,9 @@ function fileToHit(f) {
 
 /**
  * Google Drive をキーワード (全文) + 期間で検索する。
- * 共有ドライブ (`corpora=allDrives`) も対象にする。
- * @param {{query:string, since?:string, until?:string, limit?:number,
+ * `driveId` (既定は .env の DRIVE_ID) があれば研究室の共有ドライブ 1 つだけを対象にし、
+ * 無ければ共有ドライブ込みでアクセスできる範囲全体 (`corpora=allDrives`) を対象にする。
+ * @param {{query:string, since?:string, until?:string, limit?:number, driveId?:string,
  *          folderIds?:string[], mimeTypes?:string[], includeShared?:boolean}} opts
  * @returns {Promise<{hits:object[], warnings:string[], total:number, hasMore:boolean}>}
  */
@@ -187,6 +196,7 @@ export async function searchFiles(opts = {}) {
     folderIds,
     mimeTypes,
     includeShared = true,
+    driveId = config.driveId,
   } = opts;
   const limit = Math.max(1, Number(opts.limit) || 20);
   const q = buildQuery({ query, since, until, folderIds, mimeTypes });
@@ -202,9 +212,12 @@ export async function searchFiles(opts = {}) {
       pageSize: String(Math.min(Math.max(limit - files.length, 1), 100)),
       supportsAllDrives: "true",
       includeItemsFromAllDrives: "true",
-      // 共有ドライブを含めて横断検索する (allDrives では orderBy が使えないので後で自前ソート)
-      corpora: includeShared ? "allDrives" : "user",
+      // driveId があれば研究室の共有ドライブ 1 つに絞る (配下のフォルダも再帰的に対象)。
+      // 無ければ従来どおり共有ドライブ込みで横断する
+      // (drive / allDrives では orderBy が使えないので後で自前ソート)
+      corpora: driveId ? "drive" : includeShared ? "allDrives" : "user",
     });
+    if (driveId) params.set("driveId", driveId);
     if (pageToken) params.set("pageToken", pageToken);
 
     const json = await driveFetchJson("/files", params);
@@ -232,6 +245,28 @@ export async function searchFiles(opts = {}) {
     .sort((a, b) => Date.parse(b.timestamp || 0) - Date.parse(a.timestamp || 0));
 
   return { hits, warnings, total: hits.length, hasMore };
+}
+
+/**
+ * OAuth に使った Google アカウントがメンバーになっている共有ドライブの一覧。
+ * `.env` の DRIVE_ID に設定する ID を調べるのに使う (bin/list-drives.mjs)。
+ * @returns {Promise<{id:string, name:string, createdTime?:string}[]>}
+ */
+export async function listDrives() {
+  const drives = [];
+  let pageToken = null;
+  for (let page = 0; page < MAX_PAGES; page++) {
+    const params = new URLSearchParams({
+      pageSize: "100",
+      fields: "nextPageToken, drives(id,name,createdTime)",
+    });
+    if (pageToken) params.set("pageToken", pageToken);
+    const json = await driveFetchJson("/drives", params);
+    drives.push(...(json.drives || []));
+    pageToken = json.nextPageToken || null;
+    if (!pageToken) break;
+  }
+  return drives;
 }
 
 /** 本文をプレーンテキストで書き出せる Google ネイティブ形式。 */

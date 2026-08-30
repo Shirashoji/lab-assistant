@@ -130,7 +130,15 @@ export const config = {
   },
 
   // ── Google Drive (Phase 4) ───────────────────────────────
-  /** 検索対象を絞るフォルダ ID (カンマ区切り)。未設定ならアクセスできる全ファイルが対象。 */
+  /**
+   * 研究室の共有ドライブ ID。設定するとその共有ドライブ配下だけを (再帰的に) 検索する。
+   * 未設定ならアクセスできる範囲全体 (マイドライブ + 全共有ドライブ) が対象。
+   * ID は `node scripts/bin/list-drives.mjs` で調べられる。
+   */
+  get driveId() {
+    return env("DRIVE_ID");
+  },
+  /** さらに絞るフォルダ ID (カンマ区切り)。直下のファイルのみ (再帰しない)。 */
   get driveFolderIds() {
     return list("DRIVE_FOLDER_IDS");
   },

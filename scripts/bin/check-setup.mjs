@@ -91,9 +91,15 @@ async function checkDrive() {
   try {
     // files.list を 1 件だけ叩いてスコープと疎通を確認する
     const { hits } = await searchFiles({ query: "", limit: 1 });
+    // どこを見に行く設定になっているかも出す (DRIVE_ID 未設定だと全ドライブ横断)
+    const scope = config.driveId
+      ? `共有ドライブ ${config.driveId} に限定`
+      : "全ドライブ横断 (DRIVE_ID 未設定 — node scripts/bin/list-drives.mjs で ID を確認)";
     driveStatus = {
       ok: true,
-      detail: `drive.readonly スコープ OK (サンプル: ${hits[0]?.title || "ファイル 0 件"})`,
+      detail:
+        `drive.readonly スコープ OK / ${scope} ` +
+        `(サンプル: ${hits[0]?.title || "ファイル 0 件"})`,
     };
   } catch (e) {
     driveStatus = { ok: false, detail: e.message };

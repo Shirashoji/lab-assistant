@@ -12,9 +12,12 @@
 | --- | --- |
 | `add-event` — URL(Discord / esa)から予定を抽出 → 重複チェック → カレンダー作成 | ✅ 動作 |
 | esa 検索 — 公式 MCP `@esaio/esa-mcp-server` を `.mcp.json` でバンドル | ✅ 動作 |
-| 横断検索(Calendar / Slack / Discord) — `scripts/bin/search.mjs` | ✅ 動作 |
+| 横断検索(Calendar / Slack / Discord / GitHub / Drive) — `scripts/bin/search.mjs` | ✅ 動作 |
 | スキル `find-schedule` / `check-shared` / `find-channel` / `search-lab` | ✅ 動作 |
-| Google Drive / GitHub | 🚧 Phase 4 |
+| スキル `find-expert` — トピックに詳しい人を根拠付きで探す — `scripts/bin/find-expert.mjs` | ✅ 動作 |
+| GitHub 検索(Issue / PR / コード / コミット) | ✅ 動作(`GITHUB_TOKEN` が必要) |
+| Google Drive 検索(全文) | ⚠ `auth-google.mjs` の再実行が必要(`drive.readonly` スコープ追加) |
+| Claude Desktop 対応 — `search_lab` / `find_expert` を MCP ツールとして公開 | ✅ 動作 |
 
 ## アーキテクチャ
 
@@ -111,6 +114,11 @@ node scripts/bin/check-setup.mjs
 | `GOOGLE_CALENDAR_ID` | — | 対象カレンダー。**ゼミカレンダーの ID を推奨**。既定 `primary` |
 | `TIMEZONE` | — | 既定 `Asia/Tokyo` |
 | `OAUTH_REDIRECT_PORT` | — | 既定 `4779` |
+| `GITHUB_TOKEN` | — | GitHub 検索用の PAT。未設定なら github ソースはスキップ |
+| `GITHUB_ORGS` | — | 検索対象の org(カンマ区切り)。例 `vdslab`。未設定だと GitHub 全体 |
+| `GITHUB_REPOS` | — | さらに絞る場合の `owner/name`(カンマ区切り) |
+| `DRIVE_FOLDER_IDS` | — | Drive 検索の対象フォルダ ID(カンマ区切り) |
+| `DRIVE_MIME_TYPES` | — | Drive 検索の対象 MIME タイプ(カンマ区切り) |
 
 ## 接続するカレンダーを変える
 
@@ -129,7 +137,10 @@ node scripts/bin/check-setup.mjs
 | --- | --- | --- | --- |
 | `esa` | `@esaio/esa-mcp-server`(`scripts/bin/esa-mcp.mjs`) | `esa_search_posts` / `esa_get_post` ほか | `.env` の `ESA_ACCESS_TOKEN` |
 | `seminar-calendar` | 自作の依存ゼロ stdio MCP(`scripts/bin/seminar-calendar-mcp.mjs`) | `list_events` / `search_events` / `find_duplicate_events` / `create_event` / `list_calendars` | `.env` の Google OAuth |
-| `github` / `google-drive` | (Phase 4) | — | — |
+
+
+GitHub と Google Drive は公式 MCP ではなく `scripts/lib/` の依存ゼロ実装で検索します
+(GitHub は REST search API + `GITHUB_TOKEN`、Drive は Calendar と同じ Google OAuth を再利用)。
 
 - **esa**: `esa_search_posts` の引数 `teamName` は `.env` の `ESA_DEFAULT_TEAM`(不明なら `esa_get_teams`)。
 - **seminar-calendar**: すべての操作が `.env` の `GOOGLE_CALENDAR_ID`(= ゼミカレンダー)に**固定**される。
@@ -146,7 +157,7 @@ Slack の**ワークスペース検索(`search.messages`)はユーザートー�
 
 ## 横断検索(`scripts/bin/search.mjs`)
 
-Calendar(ゼミ)/ Slack(学科)/ Discord をまたいでキーワード検索し、共通形式
+Calendar(ゼミ)/ Slack(学科)/ Discord / GitHub / Google Drive をまたいでキーワード検索し、共通形式
 (`source` / `title` / `url` / `snippet` / `author` / `timestamp`)の JSON を返します。
 esa はバンドル MCP 側で検索し、スキルが結果をまとめます。
 
@@ -155,11 +166,14 @@ node scripts/bin/search.mjs "中間報告会"
 node scripts/bin/search.mjs "M2 中間報告" --source slack --text
 node scripts/bin/search.mjs "可視化 D3" --since 2026-04-01 --limit 30
 node scripts/bin/search.mjs "ゼミ リスケ" --source discord --channels 123,456
+node scripts/bin/search.mjs "可視化" --source github --kinds issues,code --text
+node scripts/bin/search.mjs "研究会 スライド" --source drive --limit 10
 ```
 
 | オプション | 説明 |
 | --- | --- |
-| `--source a,b` | 検索対象。既定は `calendar,slack,discord` |
+| `--source a,b` | 検索対象。既定は設定済みの全ソース(`calendar,slack,discord,github,drive`) |
+| `--kinds a,b` | GitHub の検索種別。`issues`(既定)/ `code` / `commits` / `repos` |
 | `--since` / `--until` | 期間(`YYYY-MM-DD` か ISO8601) |
 | `--sort` | `relevance`(既定・今日からの近さ順)/ `newest` / `oldest` |
 | `--limit N` | 最大件数(既定 40) |
@@ -177,11 +191,51 @@ node scripts/bin/search.mjs "ゼミ リスケ" --source discord --channels 123,4
   検索したい場合は、その Bot ロールに「チャンネルを見る」「メッセージ履歴を読む」を付与してください。
 - 対象ギルドは `.env` の `DISCORD_GUILD_IDS`(未設定なら Bot の全参加サーバー)。
 
+## 詳しい人を探す(`scripts/bin/find-expert.mjs`)
+
+横断検索のヒットを **投稿者ごとに畳み込み**、「そのトピックに詳しそうな人」を
+根拠(投稿・記事のリンク)付きで返します。
+
+```bash
+node scripts/bin/find-expert.mjs "MCP" --since 2025-01-01 --top 5 --text
+node scripts/bin/find-expert.mjs "トーラス" --source discord,slack --evidence 3 --text
+# esa MCP で検索した結果 (共通ヒット形の JSON) を混ぜる
+cat esa-hits.json | node scripts/bin/find-expert.mjs "根付き木" --extra-hits - --text
+```
+
+| オプション | 説明 |
+| --- | --- |
+| `--top N` | 返す人数(既定 8) |
+| `--evidence N` | 1 人あたりの根拠件数(既定 5) |
+| `--extra-hits <path\|->` | esa など MCP 側の結果を共通ヒット形の JSON で混ぜる |
+| `--alias "a=b,c=b"` | 表記ゆれの名寄せ |
+| `--include-bots` | GitHub 連携などの Bot 投稿も含める(既定は除外) |
+| `--half-life N` | 鮮度の半減期(日、既定 365) |
+| `--min-hits N` | 根拠がこの件数未満の人を落とす |
+
+スコアは **ソースの重み × 鮮度 × 検索語の濃さ**(+ 複数ソース出現ボーナス)の合計で、
+記事を書いている人 (esa 3.0) > コードや Issue (github 2.5) > 資料 (drive 2.0) >
+発言 (discord / slack 1.0) > 予定 (calendar 0.4) の順に重く見ます。
+**あくまで機械的なヒント**なので、根拠を読んでから答えること(`skills/find-expert/` が
+その手順を持っています)。
+
+## Claude Desktop で使う
+
+```bash
+node scripts/install.mjs claude-desktop   # 依存導入 + ビルド + 設定登録まで自動
+```
+
+`lab-assistant`(検索・予定作成)に加えて、Claude Code で `.mcp.json` から自動登録される
+バンドル MCP を `lab-assistant-esa` / `lab-assistant-seminar-calendar` として同時に登録します。
+登録後は **Claude Desktop を完全に再起動**してください。
+`node scripts/install.mjs status` で導入状況を確認できます。
+
 ## スクリプト(`scripts/`)
 
 | スクリプト | 用途 |
 | --- | --- |
-| `bin/search.mjs "<query>" [opts]` | Calendar(ゼミ)/ Slack / Discord の横断検索(上記) |
+| `bin/search.mjs "<query>" [opts]` | Calendar(ゼミ)/ Slack / Discord / GitHub / Drive の横断検索(上記) |
+| `bin/find-expert.mjs "<topic>" [opts]` | トピックに詳しい人を根拠付きで推定(下記) |
 | `bin/esa-mcp.mjs` | esa 公式 MCP の起動ラッパ(`.mcp.json` から使用。直接実行しない) |
 | `bin/seminar-calendar-mcp.mjs` | ゼミカレンダー専用 MCP サーバー(`.mcp.json` から使用) |
 | `bin/collect-context.mjs <url...>` | URL 群から予定抽出用の文脈を JSON 出力 |
@@ -191,13 +245,15 @@ node scripts/bin/search.mjs "ゼミ リスケ" --source discord --channels 123,4
 | `bin/list-calendars.mjs [--json]` | アクセスできるカレンダーと ID・権限を一覧 |
 | `bin/check-setup.mjs [--quiet]` | 設定と API 疎通の確認(横断検索の準備状況も表示) |
 
-実体は `scripts/lib/`(`search` / `collect` / `dedupe` / `discord` / `esa` / `slack` / `gcal` / `url` / `text` / `mcp-stdio` / `config`)。
+実体は `scripts/lib/`(`search` / `experts` / `collect` / `dedupe` / `discord` / `esa` / `slack` / `github` / `gdrive` / `gcal` / `url` / `text` / `mcp-stdio` / `config`)。
 `bin/` は薄いラッパー。同じ `lib/` を `bot/`(任意の Discord Bot)と `mcp-server/`(任意の MCP サーバー)も共有します。
 
 ## 追加コンポーネント
 
 - `bot/` — 返信＋メンションで `add-event` を実行する Discord Bot(任意)
 - `mcp-server/` — 同じロジックを MCP ツールとして公開。ChatGPT / Codex / Claude Desktop 向け([CHATGPT.md](CHATGPT.md))
+  公開ツール: `collect_context` / `find_duplicate_events` / `create_event` /
+  `search_lab` / `find_expert` / `list_search_sources`
 
 ## 制限(現状)
 

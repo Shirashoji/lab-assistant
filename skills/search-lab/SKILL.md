@@ -38,7 +38,8 @@ esa MCP の `esa_search_posts`(`teamName` = `.env` の `ESA_DEFAULT_TEAM`)で各
 node "${CLAUDE_PLUGIN_ROOT}/scripts/bin/search.mjs" "<検索語>" --since <SINCE> --limit 40 --text
 ```
 
-(既定ソース = `calendar,slack,discord`。`--source` で絞ってもよい。)
+(既定ソース = 設定済みの全ソース `calendar,slack,discord,github,drive`。`--source` で絞ってもよい。
+GitHub は `--kinds issues,code` で種別を選べる。)
 `hits[]` の permalink・チャンネル・投稿者・日付・抜粋を控える。`skipped` / `warnings` を確認する。
 
 ### 4. まとめて答える

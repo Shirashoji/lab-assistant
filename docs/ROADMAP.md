@@ -152,18 +152,48 @@ esa にあるのか分からなくても、横断的に探して答える。イ�
 - 検証: `initialize` / `tools/list` / `list_calendars`(target=尾上ゼミ, owner) /
       `search_events`(週報 16 件) / `find_duplicate_events`(likelyMatch 検出)を実データで確認
 
-### Phase 4 — Google Drive / GitHub
-- [ ] Drive: 公式 MCP or Drive API での資料検索
-- [ ] GitHub: Issue / コード / README 検索
+### Phase 4 — Google Drive / GitHub ✅ (feat/github-search, feat/drive-search)
+判断: どちらも公式 MCP ではなく **依存ゼロの自前実装**にした。GitHub の公式 MCP は
+Docker / リモート前提で `.env` 一元管理と噛み合わず、Drive は Calendar と同じ OAuth を
+そのまま使い回せるため。共通ヒット形に載せられるので `search.mjs` / `find-expert.mjs` から
+そのまま使える。
+- [x] GitHub: `lib/github.mjs` — `/search/{issues,code,commits,repositories}`。
+      `GITHUB_TOKEN` + `GITHUB_ORGS` / `GITHUB_REPOS` でスコープする。
+      制約: code 検索は期間指定不可・author/timestamp が取れない、discussions は未対応
+      (GraphQL が要る)、Search API は 30 req/min。
+- [x] Drive: `lib/gdrive.mjs` — `files.list` の `fullText contains`。共有ドライブ込み
+      (`corpora=allDrives`)。**`auth-google.mjs` に `drive.readonly` を追加したので
+      リフレッシュトークンの取り直しが必要**。未許可時はその旨を日本語で案内する。
+- [x] `lib/search.mjs` の `AVAILABLE_SOURCES` は `calendar,slack,discord,github,drive` に。
+- 検証: GitHub は `GITHUB_ORGS=vdslab` で "可視化" → theme2026-kaziru の PR/Issue が取れた。
+  Drive はスコープ未許可の状態で再認証案内が出ることまで確認 (実データ検索は再認証後)。
+
+### Phase 4.5 — find-expert ✅ (feat/find-expert)
+「◯◯に詳しい人は?」に答えるスキル。横断検索のヒットを**人物ごとに畳み込む**。
+- [x] `lib/experts.mjs` — `aggregateExperts`。ソース重み × 鮮度 (半減期 365 日) ×
+      検索語の濃さ + 複数ソース出現ボーナス。名寄せ (`identityKey` / alias) と Bot 除外。
+- [x] `bin/find-expert.mjs` — CLI。`--extra-hits` で esa MCP の結果を混ぜられる。
+- [x] `lib/slack.mjs` に `resolveUserName(s)` — `search.messages` が返す生 ID を表示名に。
+      `users:read` が無ければ黙って ID のまま。
+- [x] `skills/find-expert/` — score を鵜呑みにせず evidence を読むこと、
+      人物評価は「観測事実」として書くことを明記。
+- 検証: "MCP" で Discord/Slack から候補 + 根拠リンクを取得。Bot (GitHub 連携) が除外され、
+  Slack の生 ID が表示名に解決されることを確認。
 
 ### Phase 5 — 配布
-- [ ] `mcp-server` に検索ツールを追加
+- [x] `mcp-server` に検索ツールを追加 — `search_lab` / `find_expert` / `list_search_sources`。
+      `find_expert` は `extraHits` で esa MCP の結果を受け取れる。
+- [x] `install.mjs claude-desktop` がバンドル MCP も登録するように
+      (`lab-assistant-esa` / `lab-assistant-seminar-calendar`)。
+      `esa-mcp.mjs` は GUI アプリ起動時に PATH が無くても npx を解決できるようにした。
 - [ ] `Agent-Plugins` マーケットプレイスに `lab-assistant` を登録
 - [ ] `install.mjs` を汎用化
 
 ## 未決事項
 
-- Drive / GitHub は公式 MCP を使う想定(esa と同じくバンドル + 起動ラッパ)。
+- ~~Drive / GitHub は公式 MCP を使う想定~~ → Phase 4 で自前実装に決定(上記)。
+- Drive を実際に使うには `node scripts/bin/auth-google.mjs` の再実行(スコープ追加)が要る。
+- GitHub は `.env` に `GITHUB_TOKEN` / `GITHUB_ORGS=vdslab` を入れると有効になる。
 - Slack: 自前アプリ + ユーザートークン方式で実装済み(管理者承認は不要だった / 2026-08-30)。
   トークン失効時は slack-app を再インストールして `SLACK_USER_TOKEN` を差し替える。
   重複アプリ `A0BTQ73GE57`(`--environment local` で試した残骸)は `slack app delete` で掃除可。

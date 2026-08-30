@@ -7,6 +7,8 @@
 //
 // stdio はそのまま受け渡す (MCP は stdin/stdout で JSON-RPC する)。
 import { spawn } from "node:child_process";
+import { existsSync } from "node:fs";
+import { dirname, join } from "node:path";
 import { config, PLUGIN_ROOT } from "../lib/config.mjs";
 
 const token = config.esaToken;
@@ -17,7 +19,15 @@ if (!token) {
   process.exit(1);
 }
 
-const npx = process.platform === "win32" ? "npx.cmd" : "npx";
+// Claude Desktop など GUI アプリから起動されると PATH が最小限で npx が見つからない。
+// 実行中の node と同じディレクトリの npx を優先し、無ければ PATH に任せる。
+function resolveNpx() {
+  const name = process.platform === "win32" ? "npx.cmd" : "npx";
+  const sibling = join(dirname(process.execPath), name);
+  return existsSync(sibling) ? sibling : name;
+}
+
+const npx = resolveNpx();
 const child = spawn(npx, ["-y", "@esaio/esa-mcp-server"], {
   stdio: "inherit",
   env: { ...process.env, ESA_ACCESS_TOKEN: token },

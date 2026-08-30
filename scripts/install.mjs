@@ -174,19 +174,26 @@ function installClaudeDesktop() {
   if (!existsSync(cfgPath)) mkdirSync(dirname(cfgPath), { recursive: true });
 
   cfg.mcpServers = cfg.mcpServers || {};
-  const entry = {
-    command: resolveNodePath(), // node をフルパスで固定 (GUI アプリは PATH を持たないため)
-    args: [MCP_STDIO_JS],
+  const node = resolveNodePath(); // node をフルパスで固定 (GUI アプリは PATH を持たないため)
+
+  // Claude Code は .mcp.json のバンドル MCP を自動登録するが、Claude Desktop は見ない。
+  // 同じ構成になるよう、ここで lab-assistant 本体と一緒に登録する。
+  const entries = {
+    "lab-assistant": { command: node, args: [MCP_STDIO_JS] },
+    ...bundledDesktopServers(node),
   };
-  const existing = JSON.stringify(cfg.mcpServers["lab-assistant"] || null);
-  if (existing === JSON.stringify(entry)) {
+
+  const existing = JSON.stringify(
+    Object.fromEntries(Object.keys(entries).map((k) => [k, cfg.mcpServers[k] ?? null]))
+  );
+  if (existing === JSON.stringify(entries)) {
     log("既に最新の内容で登録済みです。");
     return;
   }
-  cfg.mcpServers["lab-assistant"] = entry;
+  Object.assign(cfg.mcpServers, entries);
 
   log("\n登録内容:");
-  log(JSON.stringify({ "lab-assistant": entry }, null, 2));
+  log(JSON.stringify(entries, null, 2));
 
   if (DRY) {
     log("\n[dry-run] 書き込みは行いません。");
@@ -197,15 +204,47 @@ function installClaudeDesktop() {
   log("\n✅ 登録しました。Claude Desktop アプリを完全に再起動してください。");
 }
 
+/**
+ * .mcp.json (Claude Code 用のバンドル MCP 宣言) を Claude Desktop の設定形式に写す。
+ * `${CLAUDE_PLUGIN_ROOT}` を実パスに展開し、`lab-assistant-<name>` として登録する
+ * (ユーザーが既に持っている同名サーバーと衝突させないため)。
+ */
+function bundledDesktopServers(node) {
+  const declPath = join(PLUGIN_ROOT, ".mcp.json");
+  if (!existsSync(declPath)) return {};
+  const decl = readJson(declPath);
+  if (!decl) {
+    warn(`.mcp.json が JSON として読めないためバンドル MCP は登録しません: ${declPath}`);
+    return {};
+  }
+  const expand = (v) => String(v).replaceAll("${CLAUDE_PLUGIN_ROOT}", PLUGIN_ROOT);
+  const out = {};
+  for (const [name, def] of Object.entries(decl)) {
+    if (!def?.command) continue; // http/sse 型は Desktop 側の設定が別なのでスキップ
+    out[`lab-assistant-${name}`] = {
+      command: def.command === "node" ? node : expand(def.command),
+      args: (def.args || []).map(expand),
+      ...(def.env ? { env: def.env } : {}),
+    };
+  }
+  return out;
+}
+
+/** Claude Desktop に登録しうるサーバー名 (本体 + バンドル)。 */
+function desktopServerNames() {
+  return ["lab-assistant", ...Object.keys(bundledDesktopServers("node"))];
+}
+
 function uninstallClaudeDesktop() {
   const cfgPath = claudeDesktopConfigPath();
   const cfg = existsSync(cfgPath) ? readJson(cfgPath) : null;
-  if (!cfg || !cfg.mcpServers || !cfg.mcpServers["lab-assistant"]) {
+  const names = desktopServerNames().filter((n) => cfg?.mcpServers?.[n]);
+  if (!names.length) {
     log("Claude Desktop には登録されていません。");
     return;
   }
-  delete cfg.mcpServers["lab-assistant"];
-  if (DRY) return log("[dry-run] lab-assistant エントリを削除します。");
+  for (const n of names) delete cfg.mcpServers[n];
+  if (DRY) return log(`[dry-run] ${names.join(", ")} を削除します。`);
   backup(cfgPath);
   writeFileSync(cfgPath, JSON.stringify(cfg, null, 2) + "\n");
   log("✅ 削除しました。Claude Desktop を再起動してください。");
@@ -346,8 +385,13 @@ function status() {
   // claude desktop
   const cfgPath = claudeDesktopConfigPath();
   const cfg = existsSync(cfgPath) ? readJson(cfgPath) : null;
-  const inDesktop = !!cfg?.mcpServers?.["lab-assistant"];
-  log(`  ${inDesktop ? "✅" : "❌"} Claude Desktop アプリ (${cfgPath})`);
+  const desktopNames = desktopServerNames();
+  const present = desktopNames.filter((n) => cfg?.mcpServers?.[n]);
+  const inDesktop = present.length === desktopNames.length;
+  log(
+    `  ${inDesktop ? "✅" : present.length ? "⚠" : "❌"} Claude Desktop アプリ (${cfgPath})` +
+      (present.length ? ` — ${present.join(", ")}` : "")
+  );
 
   // claude code
   if (hasClaudeCli()) {

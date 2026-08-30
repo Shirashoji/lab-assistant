@@ -55,10 +55,23 @@ function toISO(value, label) {
 }
 
 /** files.list の `q` を組み立てる。 */
-function buildQuery({ query, since, until, folderIds, mimeTypes }) {
+function buildQuery({ query, groups, since, until, folderIds, mimeTypes }) {
   const parts = [];
-  const q = String(query || "").trim();
-  if (q) parts.push(`fullText contains '${escapeQueryValue(q)}'`);
+  // 関連語グループがあれば「グループ内 OR / グループ間 AND」に展開する。
+  // Drive は OR/AND を式で書けるので、
+  //   (fullText contains 'ゼミ' or fullText contains 'seminar') and (fullText contains '日程')
+  // の形にする。
+  if (groups?.length) {
+    for (const g of groups) {
+      const vs = (g.variants?.length ? g.variants : [g.base]).slice(0, 5).filter(Boolean);
+      if (!vs.length) continue;
+      const ors = vs.map((v) => `fullText contains '${escapeQueryValue(v)}'`);
+      parts.push(ors.length === 1 ? ors[0] : `(${ors.join(" or ")})`);
+    }
+  } else {
+    const q = String(query || "").trim();
+    if (q) parts.push(`fullText contains '${escapeQueryValue(q)}'`);
+  }
   parts.push("trashed = false");
   if (since) parts.push(`modifiedTime > '${escapeQueryValue(toISO(since, "since"))}'`);
   if (until) parts.push(`modifiedTime < '${escapeQueryValue(toISO(until, "until"))}'`);
@@ -201,7 +214,7 @@ export async function searchFiles(opts = {}) {
     driveId = config.driveId,
   } = opts;
   const limit = Math.max(1, Number(opts.limit) || 20);
-  const q = buildQuery({ query, since, until, folderIds, mimeTypes });
+  const q = buildQuery({ query, groups: opts.groups, since, until, folderIds, mimeTypes });
   const warnings = [];
   const files = [];
   let pageToken = null;

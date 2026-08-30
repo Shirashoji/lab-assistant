@@ -1,5 +1,6 @@
 // Google Calendar API v3 (REST) の薄いラッパ。依存ゼロ。
 import { config } from "./config.mjs";
+import { matchesGroups } from "./text.mjs";
 
 const TOKEN_URL = "https://oauth2.googleapis.com/token";
 const CAL_API = "https://www.googleapis.com/calendar/v3";
@@ -70,18 +71,27 @@ export async function listCalendars() {
 /**
  * @param {{timeMin:string, timeMax:string, q?:string, calendarId?:string}} opts
  */
-export async function listEvents({ timeMin, timeMax, q, calendarId }) {
+export async function listEvents({ timeMin, timeMax, q, calendarId, maxPages = 1 }) {
   const cal = encodeURIComponent(calendarId || config.calendarId);
-  const params = new URLSearchParams({
-    timeMin,
-    timeMax,
-    singleEvents: "true",
-    orderBy: "startTime",
-    maxResults: "50",
-  });
-  if (q) params.set("q", q);
-  const json = await calFetch(`/calendars/${cal}/events?${params}`);
-  return json.items || [];
+  const items = [];
+  let pageToken;
+  // maxPages > 1 のときは nextPageToken を辿る (q 無しで期間内を取り切りたい場合)。
+  for (let page = 0; page < Math.max(1, maxPages); page++) {
+    const params = new URLSearchParams({
+      timeMin,
+      timeMax,
+      singleEvents: "true",
+      orderBy: "startTime",
+      maxResults: "250",
+    });
+    if (q) params.set("q", q);
+    if (pageToken) params.set("pageToken", pageToken);
+    const json = await calFetch(`/calendars/${cal}/events?${params}`);
+    items.push(...(json.items || []));
+    pageToken = json.nextPageToken;
+    if (!pageToken) break;
+  }
+  return items;
 }
 
 // ── 横断検索 (Phase 1) ─────────────────────────────────────
@@ -126,8 +136,39 @@ export async function searchEvents(opts = {}) {
     ? new Date(opts.until).toISOString()
     : new Date(now + 400 * 864e5).toISOString();
   const calendarId = opts.calendarId || config.calendarId;
-  const events = await listEvents({ timeMin, timeMax, q: opts.q || undefined, calendarId });
-  return { hits: events.map((e) => eventToHit(e, calendarId)), warnings: [] };
+
+  // 関連語グループがあるときは Calendar の `q` (単一キーワードの全文検索) に頼らず、
+  // 期間内の予定をすべて取ってからローカルで OR/AND マッチする。
+  // ゼミカレンダーは件数が少ないので取り切れるし、「ゼミ」と書かれた予定を
+  // 「セミナー」で探しても見つかるようになる。
+  const groups = opts.groups?.length ? opts.groups : null;
+  const events = await listEvents({
+    timeMin,
+    timeMax,
+    q: groups ? undefined : opts.q || undefined,
+    calendarId,
+    // q でなくローカル絞り込みをする場合は期間内を取り切る必要がある
+    maxPages: groups ? 8 : 1,
+  });
+
+  // 絞り込みは **切り詰める前の生イベント** に対して行う
+  // (eventToHit は description を 200 文字に切るので、そこで判定すると取りこぼす)
+  const matched = groups
+    ? events.filter((ev) =>
+        matchesGroups(
+          [
+            ev.summary || "",
+            ev.description || "",
+            ev.location || "",
+            ev.organizer?.displayName || "",
+            (ev.attendees || []).map((a) => a.displayName || a.email || "").join(" "),
+          ].join(" "),
+          groups
+        )
+      )
+    : events;
+
+  return { hits: matched.map((e) => eventToHit(e, calendarId)), warnings: [] };
 }
 
 /**

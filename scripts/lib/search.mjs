@@ -1,14 +1,17 @@
 // 研究室の各ソースを横断検索する共通ロジック。依存ゼロ。
 // bin/search.mjs と (将来) mcp-server / スキルから使う。
 //
-// ここでコードとして検索するのは「公式 MCP が無い / 精密な制御が要る」ソース:
-//   - discord … Bot は検索 API 不可。直近メッセージを取得してフィルタする
+// 検索するソース:
+//   - esa      … esa API v1 の記事全文検索。**公式 MCP が無い環境でも動く**
+//   - discord  … Bot は検索 API 不可。直近メッセージを取得してフィルタする
 //   - calendar … ゼミカレンダー限定の期間 + キーワード検索
-//   - slack   … 自前アプリのユーザートークンで search.messages (管理者承認済み前提)
-//   - github  … REST search API (Issue/PR・コード・コミット・リポジトリ) を PAT で検索
-//   - drive   … Drive API v3 の files.list (fullText) を既存の Google OAuth で叩く
-// esa は公式 MCP (.mcp.json でバンドル) 側で検索し、
-// スキルがそれらと本モジュールの結果をまとめる。
+//   - slack    … 自前アプリのユーザートークンで search.messages (管理者承認済み前提)
+//   - github   … REST search API (Issue/PR・コード・コミット・リポジトリ) を PAT で検索
+//   - drive    … Drive API v3 の files.list (fullText) を既存の Google OAuth で叩く
+//
+// クエリは lib/expand.mjs で **関連語のグループ** に展開してから各ソースに渡す。
+// グループ内は OR / グループ間は AND なので、「ゼミ」で検索して「seminar」や
+// 「研究会」と書かれた記事も拾える。--no-expand で元の語だけに戻せる。
 //
 // すべてのソースは共通の「ヒット」形に正規化して返す:
 //   {
@@ -18,6 +21,9 @@
 //   }
 
 import { config } from "./config.mjs";
+import { expandQuery, describeExpansion } from "./expand.mjs";
+import { scoreGroups } from "./text.mjs";
+import { searchPosts as searchEsa } from "./esa.mjs";
 import { searchMessages as searchDiscord } from "./discord.mjs";
 import { searchMessages as searchSlack } from "./slack.mjs";
 import { searchEvents as searchCalendar } from "./gcal.mjs";
@@ -25,11 +31,15 @@ import { searchGitHub } from "./github.mjs";
 import { searchFiles as searchDrive } from "./gdrive.mjs";
 
 /** このモジュールがコードとして検索できるソース。 */
-export const AVAILABLE_SOURCES = ["calendar", "slack", "discord", "github", "drive"];
+export const AVAILABLE_SOURCES = ["esa", "calendar", "slack", "discord", "github", "drive"];
 
 /** そのソースを検索する前提が整っているか (.env)。 */
 export function sourceReadiness() {
   return {
+    esa: {
+      ready: !!(config.esaToken && config.esaDefaultTeam),
+      reason: "ESA_ACCESS_TOKEN / ESA_DEFAULT_TEAM",
+    },
     calendar: {
       ready: !!(config.googleClientId && config.googleClientSecret && config.googleRefreshToken),
       reason: "GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET / GOOGLE_REFRESH_TOKEN",
@@ -54,9 +64,23 @@ export function sourceReadiness() {
 }
 
 const RUNNERS = {
+  async esa(query, opts) {
+    const { hits, warnings, total } = await searchEsa({
+      query,
+      groups: opts.groups,
+      team: opts.team,
+      since: opts.since,
+      until: opts.until,
+      limit: opts.limit,
+    });
+    const coverage =
+      total != null && total > hits.length ? `${total} 件中 ${hits.length} 件` : undefined;
+    return { hits, warnings, coverage };
+  },
   async calendar(query, opts) {
     const { hits, warnings } = await searchCalendar({
       q: query,
+      groups: opts.groups,
       since: opts.since,
       until: opts.until,
       calendarId: opts.calendarId,
@@ -66,6 +90,7 @@ const RUNNERS = {
   async slack(query, opts) {
     const { hits, warnings, total } = await searchSlack({
       query,
+      groups: opts.groups,
       since: opts.since,
       until: opts.until,
       limit: opts.limit,
@@ -78,6 +103,7 @@ const RUNNERS = {
   async discord(query, opts) {
     const { hits, warnings, searchedChannels, candidateChannels, forbiddenChannels } = await searchDiscord({
       query,
+      groups: opts.groups,
       since: opts.since,
       until: opts.until,
       guildIds: config.discordGuildIds,
@@ -99,6 +125,7 @@ const RUNNERS = {
   async github(query, opts) {
     const { hits, warnings, total } = await searchGitHub({
       query,
+      groups: opts.groups,
       since: opts.since,
       until: opts.until,
       limit: opts.limit,
@@ -113,6 +140,7 @@ const RUNNERS = {
   async drive(query, opts) {
     const { hits, warnings, hasMore } = await searchDrive({
       query,
+      groups: opts.groups,
       since: opts.since,
       until: opts.until,
       limit: opts.limit,
@@ -134,11 +162,20 @@ const RUNNERS = {
  *          sort?:"relevance"|"newest"|"oldest", channels?:string[], calendarId?:string,
  *          maxChannels?:number, maxPagesPerChannel?:number, orgs?:string[], repos?:string[],
  *          kinds?:string[], enrichCode?:boolean, driveId?:string, folderIds?:string[],
- *          mimeTypes?:string[]}} [opts]
+ *          mimeTypes?:string[], expand?:boolean, relatedTerms?:string[], team?:string}} [opts]
+ *   - expand: 関連語への展開 (既定 true)。false で完全一致寄りに戻す
+ *   - relatedTerms: 呼び出し側 (スキル) が足したい関連語。元のクエリと OR で結ばれる
  */
 export async function searchAll(query, opts = {}) {
   const q = String(query || "").trim();
   if (!q) throw new Error("検索キーワードが空です");
+
+  // クエリを関連語グループに展開し、各ソースに渡す
+  const expansion = expandQuery(q, {
+    enabled: opts.expand !== false,
+    extraTerms: opts.relatedTerms || [],
+  });
+  const runOpts = { ...opts, groups: expansion.groups };
 
   const readiness = sourceReadiness();
   const requested =
@@ -161,7 +198,7 @@ export async function searchAll(query, opts = {}) {
       return [];
     }
     try {
-      const { hits, warnings: w, coverage: cov } = await runner(q, opts);
+      const { hits, warnings: w, coverage: cov } = await runner(q, runOpts);
       searched.push(src);
       perSource[src] = hits.length;
       if (cov) coverage[src] = cov;
@@ -176,6 +213,16 @@ export async function searchAll(query, opts = {}) {
 
   let hits = (await Promise.all(runs)).flat();
   hits = dedupeHits(hits);
+
+  // 関連語だけでヒットしたものより、元の語そのものを含むヒットを上に出す
+  for (const h of hits) {
+    h.score = scoreGroups(
+      `${h.title || ""} ${h.snippet || ""}`,
+      expansion.groups,
+      expansion.original
+    );
+  }
+
   hits.sort(makeSorter(opts.sort));
   if (opts.limit) hits = hits.slice(0, opts.limit);
 
@@ -184,6 +231,12 @@ export async function searchAll(query, opts = {}) {
     generatedAt: new Date().toISOString(),
     window: { since: opts.since || null, until: opts.until || null },
     sort: opts.sort || "relevance",
+    expansion: {
+      enabled: opts.expand !== false,
+      expanded: expansion.expanded,
+      groups: expansion.groups,
+      description: describeExpansion(expansion),
+    },
     searched,
     skipped,
     countBySource: perSource,
@@ -212,7 +265,13 @@ function makeSorter(mode) {
     const t = ts(h);
     return t === null ? Infinity : Math.abs(t - now);
   };
-  return (a, b) => dist(a) - dist(b);
+  // まず一致の強さ (元の語そのもの > 関連語)、同点なら今日からの近さ
+  return (a, b) => {
+    const sa = a.score ?? 0;
+    const sb = b.score ?? 0;
+    if (sa !== sb) return sb - sa;
+    return dist(a) - dist(b);
+  };
 }
 
 /** URL が同じヒットは 1 つにまとめる。 */
@@ -238,6 +297,9 @@ export function formatHits(result) {
         ? ` / 除外: ${result.skipped.map((s) => s.source).join(", ")}`
         : "")
   );
+  if (result.expansion?.description) {
+    lines.push(`関連語も検索: ${result.expansion.description}`);
+  }
   for (const [src, cov] of Object.entries(result.coverage || {})) {
     lines.push(`  ${src} 範囲: ${cov}`);
   }

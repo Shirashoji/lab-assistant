@@ -4,7 +4,8 @@
 // 自前アプリ `lab-assistant-search` (slack-app/ の manifest) を学科ワークスペースに
 // インストールして得た User OAuth Token (xoxp-) を .env の SLACK_USER_TOKEN に入れる。
 import { config } from "./config.mjs";
-import { excerpt, tokenize } from "./text.mjs";
+import { excerpt, tokenize, groupTerms } from "./text.mjs";
+import { groupsToQuery } from "./expand.mjs";
 
 const API = "https://slack.com/api";
 
@@ -51,12 +52,15 @@ function ymd(s) {
  */
 export async function searchMessages(opts = {}) {
   const { query, since, until, limit = 40, sort = "timestamp" } = opts;
-  const terms = tokenize(query);
+  // 関連語グループがあれば Slack の OR 検索に落とす ("(ゼミ OR seminar) 日程")
+  const groups = opts.groups?.length ? opts.groups : null;
+  const searchText = groups ? groupsToQuery(groups, { or: "OR", maxVariants: 5 }) : query;
+  const terms = groups ? groupTerms(groups) : tokenize(query);
   if (terms.length === 0) throw new Error("検索キーワードが空です");
   const warnings = [];
 
   // Slack 検索演算子で期間・チャンネルを絞る
-  const parts = [query];
+  const parts = [searchText];
   if (since) parts.push(`after:${ymd(since)}`);
   if (until) parts.push(`before:${ymd(until)}`);
   for (const ch of opts.channels || []) parts.push(`in:${ch}`);

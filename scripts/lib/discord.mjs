@@ -1,6 +1,6 @@
 // Discord REST v10 の薄いラッパと文脈収集。依存ゼロ。
 import { config } from "./config.mjs";
-import { tokenize, matchesAllTerms, excerpt } from "./text.mjs";
+import { tokenize, matchesGroups, excerpt, groupTerms } from "./text.mjs";
 
 const API = "https://discord.com/api/v10";
 
@@ -271,8 +271,13 @@ export async function searchMessages(opts = {}) {
     concurrency = 12,
     limit = 40,
   } = opts;
-  const terms = tokenize(query);
-  if (terms.length === 0) throw new Error("検索キーワードが空です");
+  // 関連語グループ (lib/expand.mjs) が渡ればそれで、無ければ元のクエリ語で絞り込む。
+  const groups =
+    opts.groups?.length
+      ? opts.groups
+      : tokenize(query).map((t) => ({ base: t, variants: [t] }));
+  if (groups.length === 0) throw new Error("検索キーワードが空です");
+  const terms = groupTerms(groups);
   const warnings = [];
   const explicit = !!((channelIds && channelIds.length) || (channelAllowList && channelAllowList.length));
 
@@ -330,7 +335,7 @@ export async function searchMessages(opts = {}) {
           (m.content || "") +
           " " +
           (m.embeds || []).map((e) => `${e.title || ""} ${e.description || ""}`).join(" ");
-        if (matchesAllTerms(hay, terms)) found.push(toDiscordHit(m, ch, terms));
+        if (matchesGroups(hay, groups)) found.push(toDiscordHit(m, ch, terms));
       }
       const oldestMs = new Date(msgs[msgs.length - 1].timestamp).getTime();
       before = msgs[msgs.length - 1].id;

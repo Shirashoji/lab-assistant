@@ -265,16 +265,42 @@ cat esa-hits.json | node scripts/bin/find-expert.mjs "根付き木" --extra-hits
 **あくまで機械的なヒント**なので、根拠を読んでから答えること(`skills/find-expert/` が
 その手順を持っています)。
 
-## Claude Desktop で使う
+## 導入・更新・解除(`scripts/install.mjs`)
+
+Claude と ChatGPT の両方に、同じスクリプトから導入できます。
 
 ```bash
-node scripts/install.mjs claude-desktop   # 依存導入 + ビルド + 設定登録まで自動
+node scripts/install.mjs install all       # claude-code + codex をまとめて
+node scripts/install.mjs update codex      # リポジトリを編集したあと入れ直す
+node scripts/install.mjs uninstall codex   # 解除
+node scripts/install.mjs status            # 導入状況
 ```
+
+| target | 対象 | 備考 |
+| --- | --- | --- |
+| `claude-code` | Claude Code のプラグイン(skills + MCP + hooks) | 参照型。更新後は `/reload-plugins` |
+| `claude-desktop` | Claude Desktop に MCP サーバーを登録 | 更新後は**アプリを完全に再起動** |
+| `codex` | ChatGPT デスクトップ / Codex のプラグイン | **コピー型**。編集したら `update` が必要 |
+| `chatgpt-web` | ChatGPT Web 用の HTTP コネクタ | HTTPS 公開が要る([CHATGPT.md](CHATGPT.md)) |
+| `all` | `claude-code` + `codex` | ローカルで完結するもの |
+
+`--dry-run` を付けると何も変更せず実行内容だけ表示します。
+
+### codex(ChatGPT デスクトップ)固有の注意
+
+- **プラグインはコピーされます**(`~/.codex/plugins/cache/`)。リポジトリを編集しても
+  反映されないので `update codex` で入れ直してください。
+- コピーには **`.env` も含まれます**。`uninstall codex` はこのキャッシュごと削除します。
+- 検索スクリプトは外部 API を叩くので、codex 実行時は
+  `-c 'sandbox_workspace_write.network_access=true'` が必要です(既定のサンドボックスは通信を遮断)。
+- マーケットプレイス定義は親ディレクトリ側(`Agent-Plugins/.agents/plugins/marketplace.json`)と
+  `~/.agents/plugins/` に生成されます。どちらもインストーラが管理します。
+
+### Claude Desktop
 
 `lab-assistant`(検索・予定作成)に加えて、Claude Code で `.mcp.json` から自動登録される
 バンドル MCP を `lab-assistant-esa` / `lab-assistant-seminar-calendar` として同時に登録します。
 登録後は **Claude Desktop を完全に再起動**してください。
-`node scripts/install.mjs status` で導入状況を確認できます。
 
 ## スクリプト(`scripts/`)
 

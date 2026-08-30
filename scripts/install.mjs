@@ -1,12 +1,19 @@
 #!/usr/bin/env node
 // lab-assistant を各アプリに導入するためのインストーラ。
 //
-//   node scripts/install.mjs claude-desktop     Claude Desktop アプリに MCP サーバーを登録
-//   node scripts/install.mjs claude-code        Claude Code にプラグインを登録
-//   node scripts/install.mjs chatgpt [--serve]  ChatGPT カスタムコネクタ用の HTTP サーバーを準備・案内
-//   node scripts/install.mjs status             各アプリの導入状況を表示
-//   node scripts/install.mjs uninstall <target> claude-desktop | claude-code を解除
+//   node scripts/install.mjs install <target>    導入する
+//   node scripts/install.mjs update  <target>    最新の内容に入れ替える
+//   node scripts/install.mjs uninstall <target>  解除する
+//   node scripts/install.mjs status              各アプリの導入状況を表示
 //
+//   <target>: claude-code | claude-desktop | codex | chatgpt-web | all
+//     claude-code    Claude Code のプラグイン (skills + MCP + hooks)
+//     claude-desktop Claude Desktop アプリに MCP サーバーを登録
+//     codex          ChatGPT デスクトップ / Codex のプラグイン (skills + MCP)
+//     chatgpt-web    ChatGPT Web 用の HTTP コネクタ (要 HTTPS 公開)
+//     all            claude-code + codex (ローカルで完結するもの)
+//
+//   互換: `install.mjs claude-code` のように動詞を省くと install として扱う。
 //   共通オプション: --dry-run (変更せず内容だけ表示)
 import { execFileSync, spawnSync } from "node:child_process";
 import {
@@ -17,6 +24,9 @@ import {
   mkdirSync,
   statSync,
   readdirSync,
+  lstatSync,
+  rmSync,
+  symlinkSync,
 } from "node:fs";
 import { homedir, platform } from "node:os";
 import { dirname, join, resolve } from "node:path";
@@ -30,6 +40,16 @@ const MCP_DIR = join(PLUGIN_ROOT, "mcp-server");
 const MCP_STDIO_JS = join(MCP_DIR, "dist", "stdio.js");
 const MCP_ENV = join(MCP_DIR, ".env");
 const PLUGIN_ENV = join(PLUGIN_ROOT, ".env");
+// マーケットプレイス定義。Claude と OpenAI で置き場所が違うが、どちらも
+// Agent-Plugins/ (= MARKETPLACE_ROOT) を root として ./lab-assistant を指す。
+const CLAUDE_MARKETPLACE = join(MARKETPLACE_ROOT, ".claude-plugin", "marketplace.json");
+const OPENAI_MARKETPLACE = join(MARKETPLACE_ROOT, ".agents", "plugins", "marketplace.json");
+// ChatGPT デスクトップが読む個人マーケットプレイス。相対パスしか書けない仕様なので
+// プラグイン本体へのシンボリックリンクを置く。
+const PERSONAL_MARKETPLACE_DIR = join(homedir(), ".agents", "plugins");
+const MARKETPLACE_NAME = "vdslab-agent-plugins";
+const PERSONAL_MARKETPLACE_NAME = "vdslab-local";
+const PLUGIN_NAME = "lab-assistant";
 
 const args = process.argv.slice(2);
 const target = args[0];
@@ -269,6 +289,25 @@ function uninstallClaudeCode() {
   run("claude", ["plugin", "uninstall", "lab-assistant"]);
 }
 
+/** マーケットプレイスを取り込み直してからプラグインを入れ直す。 */
+function updateClaudeCode() {
+  if (!hasClaudeCli()) return warn("`claude` CLI が見つかりません。");
+  log("マーケットプレイスを更新します…");
+  run("claude", ["plugin", "marketplace", "update", MARKETPLACE_NAME]);
+  log("\nプラグインを入れ直します…");
+  run("claude", ["plugin", "install", `${PLUGIN_NAME}@${MARKETPLACE_NAME}`]);
+  log(
+    "\n✅ 最新の内容に入れ替えました。\n" +
+      "   実行中の Claude Code セッションでは /reload-plugins を実行してください。"
+  );
+}
+
+/** MCP を建て直して登録を書き直す (installClaudeDesktop は冪等)。 */
+function updateClaudeDesktop() {
+  ensureMcpBuilt();
+  installClaudeDesktop();
+}
+
 function hasClaudeCli() {
   try {
     execFileSync("claude", ["--version"], { stdio: "ignore" });
@@ -278,7 +317,153 @@ function hasClaudeCli() {
   }
 }
 
-// ── chatgpt ────────────────────────────────────────────────
+
+// ── codex / ChatGPT デスクトップ ────────────────────────────
+function hasCodexCli() {
+  try {
+    execFileSync("codex", ["--version"], { stdio: "ignore" });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** OpenAI 形式のマーケットプレイス定義を書き出す (無ければ作る)。 */
+function ensureOpenAiMarketplace() {
+  const body = {
+    name: MARKETPLACE_NAME,
+    interface: { displayName: "vdslab Agent Plugins" },
+    plugins: [
+      {
+        name: PLUGIN_NAME,
+        source: { source: "local", path: `./${PLUGIN_NAME}` },
+        policy: { installation: "AVAILABLE", authentication: "ON_USE" },
+        category: "Productivity",
+      },
+    ],
+  };
+  const json = JSON.stringify(body, null, 2) + "\n";
+  if (readJson(OPENAI_MARKETPLACE) && readFileSync(OPENAI_MARKETPLACE, "utf8") === json) return;
+  if (DRY) return log(`[dry-run] ${OPENAI_MARKETPLACE} を書き出します`);
+  mkdirSync(dirname(OPENAI_MARKETPLACE), { recursive: true });
+  writeFileSync(OPENAI_MARKETPLACE, json);
+  log(`  マーケットプレイス定義: ${OPENAI_MARKETPLACE}`);
+}
+
+/**
+ * ChatGPT デスクトップが読む個人マーケットプレイス (~/.agents/plugins/)。
+ * source.path は root 内の相対パスしか書けないので、本体へのシンボリックリンクを置く。
+ */
+function ensurePersonalMarketplace() {
+  const link = join(PERSONAL_MARKETPLACE_DIR, PLUGIN_NAME);
+  const file = join(PERSONAL_MARKETPLACE_DIR, "marketplace.json");
+  const body = {
+    name: PERSONAL_MARKETPLACE_NAME,
+    interface: { displayName: "vdslab (local)" },
+    plugins: [
+      {
+        name: PLUGIN_NAME,
+        source: { source: "local", path: `./${PLUGIN_NAME}` },
+        policy: { installation: "AVAILABLE", authentication: "ON_USE" },
+        category: "Productivity",
+      },
+    ],
+  };
+  if (DRY) return log(`[dry-run] ${file} と ${link} を用意します`);
+  mkdirSync(PERSONAL_MARKETPLACE_DIR, { recursive: true });
+  // 既存の marketplace.json に他のプラグインが並んでいたら壊さない
+  const cur = readJson(file);
+  if (cur && Array.isArray(cur.plugins)) {
+    const rest = cur.plugins.filter((x) => x?.name !== PLUGIN_NAME);
+    body.plugins = [...rest, ...body.plugins];
+    body.name = cur.name || body.name;
+  }
+  writeFileSync(file, JSON.stringify(body, null, 2) + "\n");
+  try {
+    if (existsSync(link) || lstatSync(link, { throwIfNoEntry: false })) rmSync(link, { force: true });
+  } catch {
+    /* 無ければそのまま作る */
+  }
+  symlinkSync(PLUGIN_ROOT, link);
+  log(`  個人マーケットプレイス: ${file}`);
+}
+
+function installCodex({ quiet = false } = {}) {
+  checkEnv();
+  ensureMcpBuilt();
+  ensureOpenAiMarketplace();
+  ensurePersonalMarketplace();
+  if (!hasCodexCli()) {
+    warn(
+      "`codex` CLI が見つかりません。ChatGPT デスクトップだけで使う場合は問題ありません " +
+        "(個人マーケットプレイスは用意済みなので、アプリの Settings → Plugins を確認してください)。"
+    );
+    return;
+  }
+  log("\nマーケットプレイスを登録します…");
+  run("codex", ["plugin", "marketplace", "add", MARKETPLACE_ROOT]);
+  log("\nプラグインをインストールします…");
+  run("codex", ["plugin", "add", `${PLUGIN_NAME}@${MARKETPLACE_NAME}`]);
+  if (!quiet) {
+    log(
+      "\n✅ 完了。\n" +
+        "   codex plugin list で確認できます。\n" +
+        "   ChatGPT デスクトップは再起動後に Settings → Plugins に出ます。\n" +
+        "   注意: codex はプラグインを ~/.codex/plugins/cache/ にコピーします。\n" +
+        "         リポジトリを編集したら 'node scripts/install.mjs update codex' で入れ直してください。\n" +
+        "   注意: 検索スクリプトは外部 API を叩くため、codex 実行時は\n" +
+        "         -c 'sandbox_workspace_write.network_access=true' が必要です。"
+    );
+  }
+}
+
+/**
+ * codex はインストール時にプラグインをコピーする (スナップショット) ので、
+ * 変更を反映するには remove → add で入れ直す必要がある。
+ */
+function updateCodex() {
+  if (!hasCodexCli()) {
+    warn("`codex` CLI が見つかりません。個人マーケットプレイスだけ更新します。");
+    ensureMcpBuilt();
+    ensurePersonalMarketplace();
+    return;
+  }
+  log("古いスナップショットを削除します…");
+  run("codex", ["plugin", "remove", `${PLUGIN_NAME}@${MARKETPLACE_NAME}`]);
+  installCodex({ quiet: true });
+  log("\n✅ 最新の内容に入れ替えました。");
+}
+
+function uninstallCodex() {
+  if (hasCodexCli()) {
+    // プラグイン → マーケットプレイスの順。先に marketplace を消すと plugin を消せなくなる
+    run("codex", ["plugin", "remove", `${PLUGIN_NAME}@${MARKETPLACE_NAME}`]);
+    run("codex", ["plugin", "marketplace", "remove", MARKETPLACE_NAME]);
+  } else {
+    warn("`codex` CLI が見つかりません。");
+  }
+  const link = join(PERSONAL_MARKETPLACE_DIR, PLUGIN_NAME);
+  if (DRY) {
+    log(`[dry-run] ${link} と codex のキャッシュを削除します`);
+    return;
+  }
+  rmSync(link, { force: true });
+  log(`  個人マーケットプレイスのリンクを削除: ${link}`);
+
+  // codex のキャッシュには .env のコピーが含まれる。消え残りがあれば明示的に消す。
+  const cache = join(homedir(), ".codex", "plugins", "cache", MARKETPLACE_NAME);
+  if (existsSync(cache)) {
+    rmSync(cache, { recursive: true, force: true });
+    log(`  キャッシュを削除: ${cache}`);
+  }
+  log(
+    existsSync(cache)
+      ? `\n⚠ キャッシュが残っています: ${cache} (.env のコピーを含みます)`
+      : "\n✅ 解除しました。認証情報のコピーを含むキャッシュも削除済みです。"
+  );
+}
+
+// ── chatgpt (Web / HTTP コネクタ) ───────────────────────────
 function ensureAuthToken() {
   let lines = existsSync(MCP_ENV) ? readFileSync(MCP_ENV, "utf8").split(/\r?\n/) : [];
   const idx = lines.findIndex((l) => l.startsWith("MCP_AUTH_TOKEN="));
@@ -402,46 +587,120 @@ function status() {
     log("  —  Claude Code (claude CLI 未検出)");
   }
 
-  log(`\nChatGPT はローカル設定を持ちません。'node scripts/install.mjs chatgpt' を参照。`);
+  // codex / ChatGPT デスクトップ
+  if (hasCodexCli()) {
+    const r = spawnSync("codex", ["plugin", "list"], { encoding: "utf8" });
+    const line = (r.stdout || "")
+      .split("\n")
+      .find((l) => l.startsWith(`${PLUGIN_NAME}@${MARKETPLACE_NAME}`));
+    const on = !!line && line.includes("installed");
+    log(`  ${on ? "✅" : "❌"} Codex プラグイン (${PLUGIN_NAME}@${MARKETPLACE_NAME})`);
+  } else {
+    log("  —  Codex (codex CLI 未検出)");
+  }
+  const linked = existsSync(join(PERSONAL_MARKETPLACE_DIR, PLUGIN_NAME));
+  log(
+    `  ${linked ? "✅" : "❌"} ChatGPT デスクトップ用の個人マーケットプレイス ` +
+      `(${PERSONAL_MARKETPLACE_DIR})`
+  );
+
+  log(
+    `\nChatGPT Web のコネクタはローカル設定を持ちません。` +
+      `'node scripts/install.mjs install chatgpt-web' を参照。`
+  );
 }
 
 // ── main ───────────────────────────────────────────────────
+const TARGETS = {
+  "claude-code": {
+    label: "Claude Code プラグイン",
+    install: installClaudeCode,
+    update: updateClaudeCode,
+    uninstall: uninstallClaudeCode,
+  },
+  "claude-desktop": {
+    label: "Claude Desktop アプリ (MCP)",
+    install: installClaudeDesktop,
+    update: updateClaudeDesktop,
+    uninstall: uninstallClaudeDesktop,
+  },
+  codex: {
+    label: "ChatGPT デスクトップ / Codex プラグイン",
+    install: installCodex,
+    update: updateCodex,
+    uninstall: uninstallCodex,
+  },
+  "chatgpt-web": {
+    label: "ChatGPT Web コネクタ (HTTP)",
+    install: installChatgpt,
+    update: installChatgpt,
+    uninstall: () =>
+      log("ChatGPT Web コネクタはローカル設定を持ちません。ChatGPT の設定画面から削除してください。"),
+  },
+};
+
+/** ローカルで完結するもの (all) */
+const ALL = ["claude-code", "codex"];
+
 function usage() {
   log(
     [
       "使い方:",
-      "  node scripts/install.mjs claude-desktop      Claude Desktop アプリに MCP を登録",
-      "  node scripts/install.mjs claude-code         Claude Code にプラグインを登録",
-      "  node scripts/install.mjs chatgpt [--serve]   ChatGPT コネクタ用 HTTP サーバーの準備・案内",
-      "  node scripts/install.mjs status              導入状況を表示",
-      "  node scripts/install.mjs uninstall <target>  claude-desktop | claude-code を解除",
+      "  node scripts/install.mjs install   <target>   導入する",
+      "  node scripts/install.mjs update    <target>   最新の内容に入れ替える",
+      "  node scripts/install.mjs uninstall <target>   解除する",
+      "  node scripts/install.mjs status               導入状況を表示",
+      "",
+      "  <target>:",
+      "    claude-code     Claude Code のプラグイン (skills + MCP + hooks)",
+      "    claude-desktop  Claude Desktop アプリに MCP サーバーを登録",
+      "    codex           ChatGPT デスクトップ / Codex のプラグイン (skills + MCP)",
+      "    chatgpt-web     ChatGPT Web 用の HTTP コネクタ (要 HTTPS 公開)",
+      `    all             ${ALL.join(" + ")}`,
       "",
       "  --dry-run  変更せず内容だけ表示",
+      "",
+      "例:",
+      "  node scripts/install.mjs install all",
+      "  node scripts/install.mjs update codex     # リポジトリを編集したあと",
+      "  node scripts/install.mjs uninstall codex",
     ].join("\n")
   );
 }
 
-switch (target) {
-  case "claude-desktop":
-    installClaudeDesktop();
-    break;
-  case "claude-code":
-    installClaudeCode();
-    break;
-  case "chatgpt":
-    installChatgpt();
-    break;
-  case "status":
-    status();
-    break;
-  case "uninstall": {
-    const t = args[1];
-    if (t === "claude-desktop") uninstallClaudeDesktop();
-    else if (t === "claude-code") uninstallClaudeCode();
-    else die("uninstall の対象は claude-desktop または claude-code です");
-    break;
+function dispatch(verb, name) {
+  if (name === "all") {
+    for (const t of ALL) {
+      log(`\n── ${TARGETS[t].label} ──`);
+      TARGETS[t][verb]();
+    }
+    return;
   }
-  default:
-    usage();
-    process.exit(target ? 1 : 0);
+  const t = TARGETS[name];
+  if (!t) {
+    die(
+      `不明な対象です: ${name || "(未指定)"}\n` +
+        `  指定できるのは ${Object.keys(TARGETS).join(" | ")} | all です。`
+    );
+  }
+  t[verb]();
+}
+
+const VERBS = new Set(["install", "update", "uninstall"]);
+const positional = args.filter((a) => !a.startsWith("--"));
+
+if (positional[0] === "status") {
+  status();
+} else if (VERBS.has(positional[0])) {
+  dispatch(positional[0], positional[1]);
+} else if (positional[0] === "chatgpt") {
+  // 旧名。HTTP コネクタの準備を指していた
+  warn("`chatgpt` は `chatgpt-web` に変わりました (ChatGPT デスクトップ用は `codex`)。");
+  installChatgpt();
+} else if (positional[0] && TARGETS[positional[0]]) {
+  // 動詞省略は install 扱い (旧来の使い方との互換)
+  dispatch("install", positional[0]);
+} else {
+  usage();
+  process.exit(positional[0] ? 1 : 0);
 }

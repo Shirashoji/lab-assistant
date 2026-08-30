@@ -18,15 +18,13 @@
 
 ## アーキテクチャ
 
-- **公式 MCP がある情報源**(esa、将来: GitHub / Drive)は、その MCP サーバーを
-  `.mcp.json` でバンドルする。Claude Code はプラグイン読み込み時に自動登録し、
-  `plugin:lab-assistant:<server>` という名前で使えるようになる。
-- **公式 MCP が無い / 精密な制御が要る**もの(Discord 検索、Slack 検索、ゼミカレンダーの予定操作)は
-  `scripts/` の依存ゼロ Node スクリプトで実装する。
-  - Slack は公式 MCP もあるが、接続に**ワークスペース管理者の承認**が要る。承認が下りない場合の
-    代替として、`search:read` だけを持つ最小アプリ([slack-app/](slack-app/))+ ユーザートークンで
-    `search.messages` を叩く方式にしている。
-- **スキル**が両者を順に呼び出して結果をまとめる。
+- **MCP で扱うもの**は `.mcp.json` でバンドルする(自動登録名 `plugin:lab-assistant:<server>`)。
+  - `esa` … 公式 `@esaio/esa-mcp-server`
+  - `seminar-calendar` … 公式 MCP が無く、かつ「ゼミカレンダーに固定したい」ので依存ゼロ Node で自作
+- **横断検索の実行器**(`scripts/bin/search.mjs` / `lib/`)は依存ゼロ Node。Discord は Bot が検索 API を
+  使えず、Slack は公式 MCP に管理者承認が要るため、どちらも raw REST で実装
+  (Slack は `search:read` だけの最小アプリ [slack-app/](slack-app/) + ユーザートークン)。
+- **スキル**が MCP ツールと `search.mjs` を順に呼び出して結果をまとめる。
 
 ## 使い方
 
@@ -123,16 +121,20 @@ node scripts/bin/check-setup.mjs
 
 ## バンドル MCP(`.mcp.json`)
 
-公式 MCP がある情報源は、そのサーバーを `.mcp.json` に宣言してプラグインに同梱します。
-Claude Code はプラグイン読み込み時に `plugin:lab-assistant:<server>` として自動登録します。
+`.mcp.json` に宣言した MCP サーバーは、Claude Code がプラグイン読み込み時に
+`plugin:lab-assistant:<server>` として自動登録します。認証情報は `scripts/bin/<x>-mcp.mjs` の
+起動ラッパが `.env` から渡すので、`.env` 一元管理のままです。
 
-| サーバー | 実体 | 認証 |
-| --- | --- | --- |
-| `esa` | `@esaio/esa-mcp-server`(`scripts/bin/esa-mcp.mjs` 経由で `.env` のトークンを注入) | `.env` の `ESA_ACCESS_TOKEN` |
-| `github` / `google-drive` | (Phase 4) | — |
+| サーバー | 実体 | 提供ツール | 認証 |
+| --- | --- | --- | --- |
+| `esa` | `@esaio/esa-mcp-server`(`scripts/bin/esa-mcp.mjs`) | `esa_search_posts` / `esa_get_post` ほか | `.env` の `ESA_ACCESS_TOKEN` |
+| `seminar-calendar` | 自作の依存ゼロ stdio MCP(`scripts/bin/seminar-calendar-mcp.mjs`) | `list_events` / `search_events` / `find_duplicate_events` / `create_event` / `list_calendars` | `.env` の Google OAuth |
+| `github` / `google-drive` | (Phase 4) | — | — |
 
-esa の検索は MCP ツール `esa_search_posts`(引数 `teamName` が必要 — `.env` の
-`ESA_DEFAULT_TEAM`、または `esa_get_teams` で確認)を使います。スキルがこれを呼びます。
+- **esa**: `esa_search_posts` の引数 `teamName` は `.env` の `ESA_DEFAULT_TEAM`(不明なら `esa_get_teams`)。
+- **seminar-calendar**: すべての操作が `.env` の `GOOGLE_CALENDAR_ID`(= ゼミカレンダー)に**固定**される。
+  Claude アプリ標準の Google Calendar コネクタと混同しないための専用サーバー。予定の確認・追加は
+  スキルがこのサーバー経由で行う(`bin/*.mjs` は bot / ChatGPT 用のフォールバック)。
 
 ### Slack — 自前アプリ + ユーザートークン
 
@@ -181,6 +183,7 @@ node scripts/bin/search.mjs "ゼミ リスケ" --source discord --channels 123,4
 | --- | --- |
 | `bin/search.mjs "<query>" [opts]` | Calendar(ゼミ)/ Slack / Discord の横断検索(上記) |
 | `bin/esa-mcp.mjs` | esa 公式 MCP の起動ラッパ(`.mcp.json` から使用。直接実行しない) |
+| `bin/seminar-calendar-mcp.mjs` | ゼミカレンダー専用 MCP サーバー(`.mcp.json` から使用) |
 | `bin/collect-context.mjs <url...>` | URL 群から予定抽出用の文脈を JSON 出力 |
 | `bin/find-duplicate.mjs --summary S --start ISO` | 重複候補イベントを JSON 出力 |
 | `bin/create-event.mjs`(stdin JSON) | 予定を作成 |
@@ -188,7 +191,7 @@ node scripts/bin/search.mjs "ゼミ リスケ" --source discord --channels 123,4
 | `bin/list-calendars.mjs [--json]` | アクセスできるカレンダーと ID・権限を一覧 |
 | `bin/check-setup.mjs [--quiet]` | 設定と API 疎通の確認(横断検索の準備状況も表示) |
 
-実体は `scripts/lib/`(`search` / `collect` / `dedupe` / `discord` / `esa` / `gcal` / `url` / `text` / `config`)。
+実体は `scripts/lib/`(`search` / `collect` / `dedupe` / `discord` / `esa` / `slack` / `gcal` / `url` / `text` / `mcp-stdio` / `config`)。
 `bin/` は薄いラッパー。同じ `lib/` を `bot/`(任意の Discord Bot)と `mcp-server/`(任意の MCP サーバー)も共有します。
 
 ## 追加コンポーネント

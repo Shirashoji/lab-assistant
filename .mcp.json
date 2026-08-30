@@ -2,5 +2,9 @@
   "esa": {
     "command": "node",
     "args": ["${CLAUDE_PLUGIN_ROOT}/scripts/bin/esa-mcp.mjs"]
+  },
+  "seminar-calendar": {
+    "command": "node",
+    "args": ["${CLAUDE_PLUGIN_ROOT}/scripts/bin/seminar-calendar-mcp.mjs"]
   }
 }

@@ -123,10 +123,13 @@ for (const [src, s] of Object.entries(readiness)) {
   const mark = s.ready ? "✅" : "—";
   process.stdout.write(`  ${mark} ${src}${s.ready ? "" : ` — ${s.reason}`}\n`);
 }
+const calReady = !!(config.googleClientId && config.googleClientSecret && config.googleRefreshToken);
 process.stdout.write(
   `\nバンドル MCP (.mcp.json — Claude Code がプラグイン読み込み時に自動登録):\n` +
     `  ${config.esaToken ? "✅" : "—"} esa (plugin:lab-assistant:esa) — ` +
-    `${config.esaToken ? "@esaio/esa-mcp-server を .env の ESA_ACCESS_TOKEN で起動" : "ESA_ACCESS_TOKEN 未設定"}\n`
+    `${config.esaToken ? "@esaio/esa-mcp-server を .env の ESA_ACCESS_TOKEN で起動" : "ESA_ACCESS_TOKEN 未設定"}\n` +
+    `  ${calReady ? "✅" : "—"} seminar-calendar (plugin:lab-assistant:seminar-calendar) — ` +
+    `${calReady ? `ゼミの Google Calendar 専用 (${config.calendarId})` : "Google OAuth 未設定"}\n`
 );
 
 process.stdout.write(

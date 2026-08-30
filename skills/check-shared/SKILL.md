@@ -28,9 +28,15 @@ argument-hint: "<共有予定の URL またはトピック>"
 
 ### 2. esa を検索する
 
-esa MCP の `esa_search_posts`(`teamName` = `.env` の `ESA_DEFAULT_TEAM`)で、URL・ベース URL・
-各検索語を順に検索。特に **週報カテゴリ**(`週報/...`)の記事に同じ URL / 題材が無いか見る。
-一致したら記事 URL・タイトル・投稿者(`screen_name`)・更新日を控える。
+```bash
+node "${CLAUDE_PLUGIN_ROOT}/scripts/bin/search.mjs" "<検索語>" --source esa --since <SINCE> --limit 20 --text
+```
+
+URL・ベース URL・各検索語を順に検索する。特に **週報カテゴリ**(`週報/...`)の記事に
+同じ URL / 題材が無いか見る。一致したら記事 URL・タイトル・投稿者・更新日を控える。
+
+**URL で検索するときは `--no-expand` を付ける**(URL は関連語展開の対象ではないうえ、
+展開すると余計なヒットが増えるため)。
 
 ### 3. Slack を検索する
 

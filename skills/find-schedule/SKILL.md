@@ -11,14 +11,15 @@ argument-hint: "<探したいイベント(例: M2 中間報告会)>"
 # 研究室・学科イベントの日程を横断検索する
 
 散在する情報を統合し、最も確実で最新のイベント日程を **出典付き** で答える。
-公式 MCP がある esa はそのツールを、Calendar / Slack / Discord は `scripts/bin/search.mjs` を使う。
+esa / Calendar / Slack / Discord / GitHub / Drive は `scripts/bin/search.mjs` で横断検索する
+(**esa MCP の有無に関係なく動く**)。
 
 ## 前提
 
 - `node "${CLAUDE_PLUGIN_ROOT}/scripts/bin/check-setup.mjs"` が主要項目 ✅ であること。
   未設定のソースは自動でスキップされるが、その事実は回答に明記する。
-- esa MCP のツール(`esa_search_posts` など)が使えること。使えない場合は `.mcp.json` の
-  `esa` サーバーが登録されているか(`/mcp`)を確認するようユーザーに促す。
+- 検索語の関連語(「ゼミ」→ セミナー / seminar / 研究会 など)はスクリプトが自動で広げる。
+  足りなければ `--related 語1,語2`、広がりすぎるなら `--no-expand`。
 
 ## 手順
 
@@ -45,15 +46,19 @@ MCP が使えない場合のフォールバック:
 
 ### 3. esa の議事録・資料を確認する
 
-esa MCP の `esa_search_posts` を使う。`teamName` は `.env` の `ESA_DEFAULT_TEAM`
-(不明なら `esa_get_teams` で確認)。クエリ例:
+```bash
+node "${CLAUDE_PLUGIN_ROOT}/scripts/bin/search.mjs" "<イベント名>" --source esa --since <SINCE> --limit 20 --text
+```
+
+クエリ例:
 
 - `<イベント名>`
-- `<イベント名> 日程` / `次回 <イベント名>`
+- `<イベント名> 日程` (「日程」は 予定 / スケジュール / 日時 にも自動で広がる)
 - `議事録 <イベント名>` / `先生ミーティング`
 
 直近の議事録の「次回の予定」「持ち物」「宿題」欄と、`<イベント名>` を含む資料記事を読む。
-記事の `url` と更新日を控える。
+記事の `url` と更新日を控える。本文を全部読みたい記事があれば
+`node "${CLAUDE_PLUGIN_ROOT}/scripts/bin/collect-context.mjs" "<esa URL>"` で全文が取れる。
 
 ### 4. Slack / Discord の直近アナウンスを確認する
 

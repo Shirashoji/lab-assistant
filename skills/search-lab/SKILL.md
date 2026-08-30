@@ -9,8 +9,9 @@ argument-hint: "<調べたいこと>"
 
 # 研究室・学科の情報を横断検索する
 
-`$ARGUMENTS` のトピックを、公式 MCP がある esa はそのツールで、Calendar / Slack / Discord は
-`scripts/bin/search.mjs` で調べ、結果を 1 つにまとめて出典付きで答える。
+`$ARGUMENTS` のトピックを `scripts/bin/search.mjs` で横断検索し、結果を 1 つにまとめて
+出典付きで答える。esa / Calendar / Slack / Discord / GitHub / Drive はすべてこの 1 コマンドで
+検索でき、**esa MCP が使えるかどうかに関係なく動く**。
 
 ## まず振り分け
 
@@ -24,23 +25,30 @@ argument-hint: "<調べたいこと>"
 
 ### 1. 検索語を組み立てる
 
-トピックから 2〜4 個の検索語(略称・言い換え・英語/日本語)を用意する。期間は既定で
-**今日の 180 日前**〜今日。古い経緯も追うなら広げる。以降 `<SINCE>` はその日付。
+期間は既定で **今日の 180 日前**〜今日。古い経緯も追うなら広げる。以降 `<SINCE>` はその日付。
 
-### 2. esa を検索する
+検索語は 1〜2 個でよい。**関連語はスクリプト側が自動で広げる**(「ゼミ」→ セミナー / seminar /
+研究会、「可視化」→ ビジュアライゼーション / visualization / viz。グループ内 OR / グループ間 AND)。
+辞書に無い言い換え(研究テーマ名・人名・プロジェクト名など)を足したいときだけ
+`--related 語1,語2` を使う。逆に絞り込みすぎるほど広がってしまうときは `--no-expand`。
 
-esa MCP の `esa_search_posts`(`teamName` = `.env` の `ESA_DEFAULT_TEAM`)で各検索語を検索。
-議事録・資料・週報から関連記事を集め、`url` / タイトル / 更新日 / 要点を控える。
-
-### 3. Slack / Discord / Calendar を検索する
+### 2. 横断検索する
 
 ```bash
 node "${CLAUDE_PLUGIN_ROOT}/scripts/bin/search.mjs" "<検索語>" --since <SINCE> --limit 40 --text
 ```
 
-(既定ソース = 設定済みの全ソース `calendar,slack,discord,github,drive`。`--source` で絞ってもよい。
+(既定ソース = 設定済みの全ソース `esa,calendar,slack,discord,github,drive`。`--source` で絞ってもよい。
 GitHub は `--kinds issues,code` で種別を選べる。)
 `hits[]` の permalink・チャンネル・投稿者・日付・抜粋を控える。`skipped` / `warnings` を確認する。
+出力の `関連語も検索:` 行に、実際に何へ展開されたかが出る。
+
+ヒットが少なすぎるときは `--related` で言い換えを足す、期間を広げる、検索語を短くする。
+多すぎるときは `--no-expand` か、語を足して AND を強める。
+
+esa 記事の本文をもっと読みたいときは、記事 URL を
+`node "${CLAUDE_PLUGIN_ROOT}/scripts/bin/collect-context.mjs" "<esa URL>"` に渡すと全文が取れる。
+(esa MCP が使えるセッションなら `esa_search_posts` を併用してもよいが、必須ではない。)
 
 ### 3.5 Drive の資料を深く読む(必要なときだけ)
 

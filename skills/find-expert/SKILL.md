@@ -24,46 +24,28 @@ argument-hint: "<詳しい人を探したいトピック>"
 
 ### 1. 検索語を組み立てる
 
-トピックから 2〜4 個の検索語を用意する。**略称・正式名称・英語/日本語・関連語**を混ぜる。
+トピックの検索語を用意する。**関連語 (略称・正式名称・英語/日本語) はスクリプトが自動で広げる**
+ので、まずは自然な 1〜2 語でよい。辞書に無い言い換えを足したいときだけ `--related` を使う。
 
-- 例: 「MCP」→ `MCP`, `Model Context Protocol`, `MCP サーバー`
-- 例: 「トーラス」→ `トーラス`, `torus`, `トーラス上` (グラフ描画文脈なら `torus layout` も)
-- 例: 「根付き木」→ `根付き木`, `rooted tree`, `木構造`
+- 例: 「MCP」→ そのまま (`Model Context Protocol` に自動展開される)
+- 例: 「トーラス」→ そのまま (`torus` に自動展開される)
+- 例: 研究テーマ名など固有の言い換え → `--related "torus layout,トーラス上"`
 
 期間は既定で **今日の 2 年前**〜今日。専門性は蓄積するので、日程系スキルより広く取る。
 以降 `<SINCE>` はその日付 (`YYYY-MM-DD`)。
 
-### 2. esa を検索して「記事の著者」を集める
-
-esa MCP の `esa_search_posts` (`teamName` = `.env` の `ESA_DEFAULT_TEAM`) で各検索語を検索する。
-**記事を書いている人は最も強い根拠**なので必ず先に取る。
-
-得られた記事を、次の共通ヒット形の JSON 配列にして一時ファイルに書く
-(`created_by.screen_name` ではなく **`updated_by`/`created_by` の表示名**を `author` に入れる):
-
-```json
-[
-  {
-    "source": "esa",
-    "title": "記事タイトル",
-    "url": "https://<team>.esa.io/posts/123",
-    "snippet": "本文の関連する箇所を 200 字程度で",
-    "author": "書いた人の表示名",
-    "timestamp": "2026-04-01T00:00:00Z"
-  }
-]
-```
-
-### 3. Slack / Discord / Calendar / GitHub / Drive を検索して人物ごとに畳み込む
+### 2. esa も含めて検索し、人物ごとに畳み込む
 
 ```bash
 node "${CLAUDE_PLUGIN_ROOT}/scripts/bin/find-expert.mjs" "<検索語>" \
-  --since <SINCE> --top 8 --evidence 4 \
-  --extra-hits /tmp/esa-hits.json --text
+  --since <SINCE> --top 8 --evidence 4 --text
 ```
 
-- 既定ソース = `.env` で設定できている全ソース (calendar / slack / discord / github / drive)。
-  `--source slack,discord` のように絞ってもよい。
+**esa は既定のソースに含まれる**(esa MCP は不要)。記事を書いている人は最も強い根拠なので、
+esa を外さないこと。外部で別途集めたヒットを混ぜたいときだけ `--extra-hits <file.json>` を使う。
+
+- 既定ソース = `.env` で設定できている全ソース (esa / calendar / slack / discord / github / drive)。
+  `--source esa,slack,discord` のように絞ってもよい。
 - 検索語が複数あるときは **語ごとに実行**し、結果を突き合わせる (同じ人が複数語で上位に来たら強い)。
 - 出力の見かた:
   - `score` … ソースの重み × 鮮度 × 検索語の濃さ の合計。**機械的なヒント**であって順位そのものではない。
@@ -72,7 +54,7 @@ node "${CLAUDE_PLUGIN_ROOT}/scripts/bin/find-expert.mjs" "<検索語>" \
 - `--alias "しらしょーじ=Shirashoji"` で表記ゆれを名寄せできる。
 - Bot / GitHub 連携の自動投稿は既定で除外される (`--include-bots` で含む)。
 
-### 4. 根拠を読んで判断する
+### 3. 根拠を読んで判断する
 
 `score` を鵜呑みにせず、`evidence` の抜粋を読んで **本当にそのトピックの話か** を確かめる。
 
@@ -81,7 +63,7 @@ node "${CLAUDE_PLUGIN_ROOT}/scripts/bin/find-expert.mjs" "<検索語>" \
 - 発表・ゼミ資料の作成者 → 詳しい人。
 - 1 件しか根拠が無い人は「候補」止まりにする。
 
-### 5. 答える
+### 4. 答える
 
 次の形でまとめる。
 

@@ -1,8 +1,8 @@
 {
-  "name": "calendar-agent",
-  "displayName": "Discord / esa → Google Calendar",
+  "name": "lab-assistant",
+  "displayName": "Lab Assistant",
   "version": "0.1.0",
-  "description": "Discord メッセージや esa 記事の URL から Google Calendar の予定を作成(返信/スレッド/分割メッセージ/esa リンク対応、重複チェック付き)",
+  "description": "研究室の情報基盤(Discord / Slack / esa / Google Calendar / Google Drive / GitHub)を横断して検索・調査し、必要ならゼミの Google Calendar に予定を追加する Claude Code プラグイン",
   "author": { "name": "takuma" },
-  "keywords": ["discord", "esa", "google-calendar", "calendar", "automation"]
+  "keywords": ["discord", "slack", "esa", "google-calendar", "google-drive", "github", "search", "research-lab", "automation"]
 }

@@ -105,6 +105,7 @@ const RUNNERS = {
       orgs: opts.orgs?.length ? opts.orgs : config.githubOrgs,
       repos: opts.repos?.length ? opts.repos : config.githubRepos,
       kinds: opts.kinds,
+      enrichCode: opts.enrichCode,
     });
     const coverage = total != null ? `${total} 件中 ${hits.length} 件` : undefined;
     return { hits, warnings, coverage };
@@ -131,7 +132,7 @@ const RUNNERS = {
  * @param {{sources?:string[], since?:string, until?:string, limit?:number,
  *          sort?:"relevance"|"newest"|"oldest", channels?:string[], calendarId?:string,
  *          maxChannels?:number, maxPagesPerChannel?:number, orgs?:string[], repos?:string[],
- *          kinds?:string[], folderIds?:string[], mimeTypes?:string[]}} [opts]
+ *          kinds?:string[], enrichCode?:boolean, folderIds?:string[], mimeTypes?:string[]}} [opts]
  */
 export async function searchAll(query, opts = {}) {
   const q = String(query || "").trim();

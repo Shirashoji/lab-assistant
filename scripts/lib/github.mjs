@@ -1,10 +1,18 @@
-// GitHub REST API v3 の薄いラッパと検索。依存ゼロ。
+// GitHub の検索。依存ゼロ。
+//
+// Issue/PR・コード・コミット・リポジトリは REST の Search API (/search/*) を使い、
+// Discussions だけは REST search に無いので GraphQL (POST /graphql) を使う。
+// どちらも lib/search.mjs の共通ヒット形に正規化して返す。
 import { config } from "./config.mjs";
 import { excerpt, tokenize } from "./text.mjs";
 
 const API = "https://api.github.com";
 const DEFAULT_KINDS = ["issues", "code"];
-const SUPPORTED_KINDS = new Set(["issues", "code", "commits", "repos"]);
+const SUPPORTED_KINDS = new Set(["issues", "code", "commits", "repos", "discussions"]);
+
+// code ヒットの author / timestamp 補完は 1 ヒットにつき 1 リクエスト増える。
+// Search API は認証済みでも 30 req/min なので、補完する件数に上限を設ける。
+const CODE_ENRICH_LIMIT = 10;
 
 async function ghFetch(path, opts = {}) {
   const token = config.githubToken;
@@ -156,6 +164,155 @@ function repoHit(item, terms) {
   };
 }
 
+/** GitHub GraphQL API を叩く。REST と違い HTTP 200 でも errors が返ることがある。 */
+async function ghGraphQL(query, variables) {
+  const token = config.githubToken;
+  if (!token) throw new Error("GITHUB_TOKEN が未設定です");
+
+  const res = await fetch(`${API}/graphql`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      Accept: "application/vnd.github+json",
+      "Content-Type": "application/json",
+      "X-GitHub-Api-Version": "2022-11-28",
+      "User-Agent": "lab-assistant",
+    },
+    body: JSON.stringify({ query, variables }),
+  });
+
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    if (res.status === 401) {
+      throw new Error("GitHub API の認証に失敗しました。GITHUB_TOKEN が無効か失効しています");
+    }
+    throw new Error(`GitHub GraphQL ${res.status}: ${json.message || "不明なエラー"}`);
+  }
+  if (json.errors?.length) {
+    const types = json.errors.map((e) => e.type || "").join(",");
+    const message = json.errors.map((e) => e.message).filter(Boolean).join(" / ");
+    if (/INSUFFICIENT_SCOPES/i.test(types) || /scope/i.test(message)) {
+      throw new Error(
+        "トークンに Discussions の読み取り権限がありません。" +
+          "PAT のスコープ (classic なら repo / public_repo、fine-grained なら Discussions の Read) を確認してください"
+      );
+    }
+    if (/RATE_LIMITED/i.test(types)) {
+      throw new Error(
+        "GitHub GraphQL API のレート制限に達しました (GraphQL は REST とは別枠のポイント制です)"
+      );
+    }
+    throw new Error(`GitHub GraphQL: ${message || "不明なエラー"}`);
+  }
+  return json.data || {};
+}
+
+const DISCUSSION_SEARCH = `
+query($q: String!, $n: Int!) {
+  search(type: DISCUSSION, query: $q, first: $n) {
+    discussionCount
+    nodes {
+      ... on Discussion {
+        title
+        url
+        bodyText
+        createdAt
+        author { login }
+        category { name }
+        repository { nameWithOwner }
+        answerChosenAt
+        comments { totalCount }
+      }
+    }
+  }
+}`;
+
+function discussionHit(node, terms) {
+  return {
+    source: "github",
+    title: node.title || "(無題)",
+    url: node.url || null,
+    snippet: excerpt(node.bodyText || "", terms),
+    // author はアカウント削除などで null になりうる
+    author: node.author?.login || null,
+    timestamp: node.createdAt || null,
+    extra: compact({
+      kind: "discussion",
+      repo: node.repository?.nameWithOwner || null,
+      category: node.category?.name || null,
+      answered: node.answerChosenAt ? true : false,
+      comments: node.comments?.totalCount ?? null,
+    }),
+  };
+}
+
+/** Discussions を GraphQL で検索する (REST の SEARCHES とは別経路)。 */
+async function searchDiscussions({ query, scope, since, until, limit, terms }) {
+  const dates = [
+    since ? `created:>=${ymd(since)}` : null,
+    until ? `created:<=${ymd(until)}` : null,
+  ];
+  const q = makeQuery(query, scope, dates);
+  const data = await ghGraphQL(DISCUSSION_SEARCH, { q, n: limit });
+  const search = data.search || {};
+  return {
+    total: search.discussionCount ?? 0,
+    // union 型なので Discussion 以外が混ざると空オブジェクトになる。title の有無で弾く。
+    hits: (search.nodes || []).filter((n) => n && n.url).map((n) => discussionHit(n, terms)),
+  };
+}
+
+/**
+ * code ヒットに author / timestamp を補う。
+ * code 検索の結果にはそれらが含まれないので、そのファイルの最新コミットを 1 件引く。
+ * 失敗しても検索全体は落とさず、そのヒットを null のままにする。
+ */
+async function enrichCodeHits(hits, warnings) {
+  const targets = hits.filter((h) => h.extra?.kind === "code").slice(0, CODE_ENRICH_LIMIT);
+  if (!targets.length) return;
+
+  const cache = new Map(); // "repo\0path" → { author, timestamp } | null
+  let failed = 0;
+
+  await Promise.all(
+    targets.map(async (hit) => {
+      const repo = hit.extra?.repo;
+      const path = hit.extra?.path;
+      if (!repo || !path) return;
+      const key = `${repo}\0${path}`;
+
+      if (!cache.has(key)) {
+        cache.set(
+          key,
+          ghFetch(`/repos/${repo}/commits`, { params: { path, per_page: "1" } })
+            .then((commits) => {
+              const c = Array.isArray(commits) ? commits[0] : null;
+              if (!c) return null;
+              return {
+                author: c.author?.login || c.commit?.author?.name || null,
+                timestamp: c.commit?.author?.date || c.commit?.committer?.date || null,
+              };
+            })
+            .catch(() => {
+              failed++;
+              return null;
+            })
+        );
+      }
+
+      const info = await cache.get(key);
+      if (info) {
+        hit.author = info.author;
+        hit.timestamp = info.timestamp;
+      }
+    })
+  );
+
+  if (failed) {
+    warnings.push(`code ヒット ${failed} 件は最新コミットを引けず author / timestamp が空のままです`);
+  }
+}
+
 const SEARCHES = {
   issues: {
     path: "/search/issues",
@@ -198,9 +355,13 @@ const SEARCHES = {
 };
 
 /**
- * GitHub の Issue / PR・コード・コミット・リポジトリを検索する。
+ * GitHub の Issue / PR・コード・コミット・リポジトリ・Discussions を検索する。
  * @param {{query:string, since?:string, until?:string, limit?:number,
- *          orgs?:string[], repos?:string[], kinds?:string[]}} opts
+ *          orgs?:string[], repos?:string[], kinds?:string[], enrichCode?:boolean}} opts
+ *   kinds は "issues" | "code" | "commits" | "repos" | "discussions" (既定 ["issues","code"])。
+ *   discussions だけ GraphQL 経由。
+ *   enrichCode を付けると code ヒットの author / timestamp を補うが、
+ *   **1 ヒットにつき 1 リクエスト増える** (先頭 CODE_ENRICH_LIMIT 件のみ)。
  * @returns {Promise<{hits:object[], warnings:string[], total:number}>}
  */
 export async function searchGitHub(opts = {}) {
@@ -214,9 +375,7 @@ export async function searchGitHub(opts = {}) {
   ];
   const kinds = [];
   for (const kind of requestedKinds) {
-    if (kind === "discussions") {
-      warnings.push("discussions 検索は未対応です（GitHub GraphQL API が必要なためスキップ）");
-    } else if (!SUPPORTED_KINDS.has(kind)) {
+    if (!SUPPORTED_KINDS.has(kind)) {
       warnings.push(`未対応の GitHub 検索種別です: ${kind}`);
     } else {
       kinds.push(kind);
@@ -233,6 +392,13 @@ export async function searchGitHub(opts = {}) {
   const scopes = makeScopes(orgs, repos);
   const runs = [];
   for (const kind of kinds) {
+    if (kind === "discussions") {
+      // REST search に Discussions は無いので GraphQL 経路に回す
+      for (const scope of scopes) {
+        runs.push(searchDiscussions({ query, scope, since, until, limit, terms }));
+      }
+      continue;
+    }
     const search = SEARCHES[kind];
     for (const scope of scopes) {
       runs.push(
@@ -269,6 +435,8 @@ export async function searchGitHub(opts = {}) {
     }
     if (!hasCandidate) break;
   }
+
+  if (opts.enrichCode) await enrichCodeHits(hits, warnings);
 
   return { hits, warnings, total };
 }

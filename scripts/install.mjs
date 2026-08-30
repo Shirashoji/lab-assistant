@@ -30,7 +30,7 @@ import {
   symlinkSync,
 } from "node:fs";
 import { homedir, platform } from "node:os";
-import { dirname, join, resolve } from "node:path";
+import { dirname, join, resolve, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { randomBytes } from "node:crypto";
 
@@ -337,7 +337,8 @@ function ensureOpenAiMarketplace() {
     plugins: [
       {
         name: PLUGIN_NAME,
-        source: { source: "local", path: `./${PLUGIN_NAME}` },
+        // ホームからの相対パス (root = ~)。上のコメント参照。
+        source: { source: "local", path: `./${relative(homedir(), link)}` },
         policy: { installation: "AVAILABLE", authentication: "ON_USE" },
         category: "Productivity",
       },
@@ -354,6 +355,11 @@ function ensureOpenAiMarketplace() {
 /**
  * ChatGPT デスクトップが読む個人マーケットプレイス (~/.agents/plugins/)。
  * source.path は root 内の相対パスしか書けないので、本体へのシンボリックリンクを置く。
+ *
+ * 注意: このマーケットプレイスの **root は ~/.agents/plugins ではなくホーム (~)**。
+ * `codex plugin marketplace list` の ROOT 列で確認できる。したがって source.path は
+ * ホームからの相対パス (`./.agents/plugins/lab-assistant`) でなければならない。
+ * `./lab-assistant` と書くと ~/lab-assistant を探しに行って "not installed" のままになる。
  */
 function ensurePersonalMarketplace() {
   const link = join(PERSONAL_MARKETPLACE_DIR, PLUGIN_NAME);
@@ -364,7 +370,8 @@ function ensurePersonalMarketplace() {
     plugins: [
       {
         name: PLUGIN_NAME,
-        source: { source: "local", path: `./${PLUGIN_NAME}` },
+        // ホームからの相対パス (root = ~)。上のコメント参照。
+        source: { source: "local", path: `./${relative(homedir(), link)}` },
         policy: { installation: "AVAILABLE", authentication: "ON_USE" },
         category: "Productivity",
       },
@@ -474,28 +481,59 @@ function installChatgptDesktop({ quiet = false } = {}) {
   checkEnv();
   ensureMcpBuilt();
   ensurePersonalMarketplace();
+  // ChatGPT デスクトップと codex CLI は ~/.codex/config.toml を共有しており、
+  // プラグインの導入状態 ([plugins."name@marketplace"] enabled) もそこに書かれる。
+  // アプリの Settings → Plugins から入れても結果は同じ。
+  if (hasCodexCli()) {
+    log("プラグインを登録します…");
+    run("codex", ["plugin", "add", `${PLUGIN_NAME}@${PERSONAL_MARKETPLACE_NAME}`]);
+  } else {
+    warn(
+      "`codex` CLI が見つかりません。マーケットプレイスは用意したので、" +
+        "ChatGPT デスクトップの Settings → Plugins から導入してください。"
+    );
+  }
   if (!quiet) {
     log(
-      "\n✅ ChatGPT デスクトップ用の設定を用意しました。\n" +
-        "   アプリの Settings → Plugins で 'vdslab (local)' の lab-assistant を有効にしてください。\n" +
-        "   (アプリ起動中に入れた場合は再起動が要ることがあります)\n" +
-        "   注意: 個人マーケットプレイスはリポジトリへのシンボリックリンクなので、\n" +
-        "         リポジトリを編集すればそのまま反映されます (入れ直し不要)。"
+      "\n✅ ChatGPT デスクトップに導入しました。\n" +
+        "   アプリを再起動すると Plugins に 'vdslab (local)' の lab-assistant が出ます。\n" +
+        "   注意: **コピー型**です。導入時にリポジトリのスナップショットが\n" +
+        `         ~/.codex/plugins/cache/${PERSONAL_MARKETPLACE_NAME}/ に作られます。\n` +
+        "         リポジトリを編集したら 'update chatgpt-desktop' で入れ直してください。\n" +
+        "   注意: スナップショットには .env のコピーが含まれます (解除時に削除されます)。"
     );
   }
 }
 
+/** コピー型なので、変更を反映するには remove → add で入れ直す。 */
 function updateChatgptDesktop() {
+  if (hasCodexCli()) {
+    log("古いスナップショットを削除します…");
+    run("codex", ["plugin", "remove", `${PLUGIN_NAME}@${PERSONAL_MARKETPLACE_NAME}`]);
+  }
   installChatgptDesktop({ quiet: true });
-  log("\n✅ 最新の内容に入れ替えました (シンボリックリンクなので常に最新です)。");
+  log("\n✅ 最新の内容に入れ替えました。");
 }
 
 function uninstallChatgptDesktop() {
+  if (hasCodexCli()) {
+    run("codex", ["plugin", "remove", `${PLUGIN_NAME}@${PERSONAL_MARKETPLACE_NAME}`]);
+  }
   const link = join(PERSONAL_MARKETPLACE_DIR, PLUGIN_NAME);
-  if (DRY) return log(`[dry-run] ${link} を削除します`);
+  if (DRY) {
+    log(`[dry-run] ${link} とスナップショットを削除します`);
+    return;
+  }
   rmSync(link, { force: true });
   log(`  個人マーケットプレイスのリンクを削除: ${link}`);
-  log("\n✅ 解除しました。");
+
+  // スナップショットには .env のコピーが含まれるので明示的に消す。
+  const cache = join(homedir(), ".codex", "plugins", "cache", PERSONAL_MARKETPLACE_NAME);
+  if (existsSync(cache)) {
+    rmSync(cache, { recursive: true, force: true });
+    log(`  スナップショットを削除: ${cache}`);
+  }
+  log("\n✅ 解除しました。認証情報のコピーを含むスナップショットも削除済みです。");
 }
 
 // ── chatgpt (Web / HTTP コネクタ) ───────────────────────────
@@ -633,9 +671,26 @@ function status() {
   } else {
     log("  —  Codex (codex CLI 未検出)");
   }
+  // ChatGPT デスクトップ: マーケットプレイスに「並んでいる」ことと、実際に
+  // 「導入済み」であることは別。codex plugin list の STATUS が実態なので両方出す。
   const linked = existsSync(join(PERSONAL_MARKETPLACE_DIR, PLUGIN_NAME));
+  let desktopState = linked ? "マーケットプレイスのみ (未導入)" : "未設定";
+  if (linked) {
+    const r = spawnSync("codex", ["plugin", "list"], { encoding: "utf8" });
+    const line = (r.stdout || "")
+      .split("\n")
+      .find((l) => l.includes(`${PLUGIN_NAME}@${PERSONAL_MARKETPLACE_NAME}`));
+    if (line) {
+      const m = line.match(/installed,\s*enabled|installed|not installed/);
+      const ver = line.match(/\b\d+\.\d+\.\d+\b/);
+      if (m && m[0] !== "not installed") {
+        desktopState = `導入済み・有効${ver ? ` (v${ver[0]})` : ""}`;
+      }
+    }
+  }
+  const desktopOk = desktopState.startsWith("導入済み");
   log(
-    `  ${linked ? "✅" : "❌"} ChatGPT デスクトップ用の個人マーケットプレイス ` +
+    `  ${desktopOk ? "✅" : linked ? "△" : "❌"} ChatGPT デスクトップ — ${desktopState} ` +
       `(${PERSONAL_MARKETPLACE_DIR})`
   );
 

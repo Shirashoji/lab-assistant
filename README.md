@@ -312,8 +312,8 @@ node scripts/install.mjs status            # 導入状況
 | --- | --- | --- |
 | `claude-code` | Claude Code のプラグイン(skills + MCP + hooks) | 参照型。更新後は `/reload-plugins` |
 | `claude-desktop` | Claude Desktop に MCP サーバーを登録 | 更新後は**アプリを完全に再起動** |
-| `chatgpt-desktop` | ChatGPT デスクトップのみ(codex CLI を使わない構成) | **リンク型**。リポジトリを編集すればそのまま反映される |
-| `codex` | ChatGPT デスクトップ + Codex CLI のプラグイン | **コピー型**。編集したら `update` が必要。`uninstall` は `chatgpt-desktop` のリンクも消す |
+| `chatgpt-desktop` | ChatGPT デスクトップ(個人マーケットプレイス `vdslab-local` 経由) | **コピー型**。編集したら `update` が必要。スナップショットに `.env` が含まれる |
+| `codex` | リポジトリのマーケットプレイス `vdslab-agent-plugins` 経由で導入 | **コピー型**。編集したら `update` が必要。`uninstall` は `chatgpt-desktop` のリンクも消す |
 | `chatgpt-web` | ChatGPT Web 用の HTTP コネクタ | HTTPS 公開が要る([CHATGPT.md](CHATGPT.md)) |
 | `all` | `claude-code` + `codex` | ローカルで完結するもの |
 

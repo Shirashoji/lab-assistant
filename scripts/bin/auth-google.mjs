@@ -6,11 +6,16 @@
 //   2. node scripts/bin/auth-google.mjs を実行
 //   3. 表示された URL をブラウザで開き、Google アカウントで許可
 //   4. 表示された GOOGLE_REFRESH_TOKEN=... を `.env` に貼り付け
+//
+// Drive 検索 (drive.readonly スコープ) を使うには、このスクリプトの再実行が必要です。
 import { createServer } from "node:http";
 import { spawn } from "node:child_process";
 import { config } from "../lib/config.mjs";
 
-const SCOPE = "https://www.googleapis.com/auth/calendar";
+const SCOPE = [
+  "https://www.googleapis.com/auth/calendar",
+  "https://www.googleapis.com/auth/drive.readonly",
+].join(" ");
 
 function openBrowser(url) {
   const cmd =

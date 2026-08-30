@@ -128,6 +128,16 @@ export const config = {
   get githubRepos() {
     return list("GITHUB_REPOS");
   },
+
+  // ── Google Drive (Phase 4) ───────────────────────────────
+  /** 検索対象を絞るフォルダ ID (カンマ区切り)。未設定ならアクセスできる全ファイルが対象。 */
+  get driveFolderIds() {
+    return list("DRIVE_FOLDER_IDS");
+  },
+  /** 検索対象の MIME タイプを絞る場合 (カンマ区切り)。 */
+  get driveMimeTypes() {
+    return list("DRIVE_MIME_TYPES");
+  },
 };
 
 // Node 18+ (global fetch) を要求

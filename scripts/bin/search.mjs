@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Google Calendar (ゼミ) / Slack (学科) / Discord / GitHub を横断検索する。
+// Google Calendar (ゼミ) / Slack (学科) / Discord / GitHub / Google Drive を横断検索する。
 // esa は公式 MCP 側で検索する (スキルが統合する)。
 //
 // 使い方:
@@ -8,6 +8,7 @@
 //   node search.mjs "M2 中間報告" --source slack --text
 //   node search.mjs "ゼミ リスケ" --source discord --channels 123,456
 //   node search.mjs "可視化" --source github --kinds issues,code --text
+//   node search.mjs "研究会 スライド" --source drive --limit 10   # Google Drive の資料
 //   node search.mjs "週報" --text          # 人間向けの整形出力
 //   node search.mjs "発表会" --sort newest # 並び: relevance(既定) | newest | oldest
 //

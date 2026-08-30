@@ -6,11 +6,14 @@
 //   2. node scripts/bin/auth-google.mjs を実行
 //   3. 表示された URL をブラウザで開き、Google アカウントで許可
 //   4. 表示された GOOGLE_REFRESH_TOKEN=... を `.env` に貼り付け
+//      (`--write` を付けると `.env` の該当行を直接書き換える)
 //
 // Drive 検索 (drive.readonly スコープ) を使うには、このスクリプトの再実行が必要です。
 import { createServer } from "node:http";
 import { spawn } from "node:child_process";
-import { config } from "../lib/config.mjs";
+import { readFileSync, writeFileSync, existsSync } from "node:fs";
+import { join } from "node:path";
+import { config, PLUGIN_ROOT } from "../lib/config.mjs";
 
 const SCOPE = [
   "https://www.googleapis.com/auth/calendar",
@@ -107,8 +110,41 @@ async function main() {
     process.exit(1);
   }
 
+  // 実際に許可されたスコープを出す。Drive が入っていない = 同意画面で
+  // drive.readonly が要求されなかった (Cloud Console のスコープ設定漏れ) と分かる。
+  const granted = String(token.scope || "").split(/\s+/).filter(Boolean);
+  const hasDrive = granted.some((s) => s.includes("/auth/drive"));
   process.stdout.write(
-    `\n✅ 取得できました。次の行を .env に貼り付けてください:\n\n` +
+    `\n許可されたスコープ:\n` + granted.map((s) => `  - ${s}\n`).join("")
+  );
+  if (!hasDrive) {
+    process.stderr.write(
+      `\n⚠ Drive のスコープが許可されていません。Drive 検索は使えません。\n` +
+        `  Google Cloud Console の「OAuth 同意画面」→ スコープに\n` +
+        `  https://www.googleapis.com/auth/drive.readonly を追加してから、\n` +
+        `  もう一度このスクリプトを実行してください。\n`
+    );
+  }
+
+  if (process.argv.includes("--write")) {
+    const envPath = join(PLUGIN_ROOT, ".env");
+    if (!existsSync(envPath)) {
+      process.stderr.write(`\n${envPath} が見つからないので書き込めませんでした。\n`);
+    } else {
+      const line = `GOOGLE_REFRESH_TOKEN=${token.refresh_token}`;
+      const before = readFileSync(envPath, "utf8");
+      const after = /^GOOGLE_REFRESH_TOKEN=.*$/m.test(before)
+        ? before.replace(/^GOOGLE_REFRESH_TOKEN=.*$/m, line)
+        : before.replace(/\n*$/, `\n${line}\n`);
+      writeFileSync(envPath, after);
+      process.stdout.write(`\n✅ ${envPath} の GOOGLE_REFRESH_TOKEN を更新しました。\n`);
+      return;
+    }
+  }
+
+  process.stdout.write(
+    `\n✅ 取得できました。次の行を .env に貼り付けてください` +
+      ` (次からは --write で自動更新できます):\n\n` +
       `GOOGLE_REFRESH_TOKEN=${token.refresh_token}\n\n`
   );
 }

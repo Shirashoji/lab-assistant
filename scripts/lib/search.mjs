@@ -116,6 +116,7 @@ const RUNNERS = {
       since: opts.since,
       until: opts.until,
       limit: opts.limit,
+      driveId: opts.driveId || config.driveId,
       folderIds: opts.folderIds?.length ? opts.folderIds : config.driveFolderIds,
       mimeTypes: opts.mimeTypes?.length ? opts.mimeTypes : config.driveMimeTypes,
     });
@@ -132,7 +133,8 @@ const RUNNERS = {
  * @param {{sources?:string[], since?:string, until?:string, limit?:number,
  *          sort?:"relevance"|"newest"|"oldest", channels?:string[], calendarId?:string,
  *          maxChannels?:number, maxPagesPerChannel?:number, orgs?:string[], repos?:string[],
- *          kinds?:string[], enrichCode?:boolean, folderIds?:string[], mimeTypes?:string[]}} [opts]
+ *          kinds?:string[], enrichCode?:boolean, driveId?:string, folderIds?:string[],
+ *          mimeTypes?:string[]}} [opts]
  */
 export async function searchAll(query, opts = {}) {
   const q = String(query || "").trim();

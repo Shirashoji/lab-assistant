@@ -164,6 +164,13 @@ Docker / リモート前提で `.env` 一元管理と噛み合わず、Drive は
 - [x] Drive: `lib/gdrive.mjs` — `files.list` の `fullText contains`。共有ドライブ込み
       (`corpora=allDrives`)。**`auth-google.mjs` に `drive.readonly` を追加したので
       リフレッシュトークンの取り直しが必要**。未許可時はその旨を日本語で案内する。
+- [x] **追補**: `.env` の `DRIVE_ID` (または `--drive`) で研究室の共有ドライブ 1 つに絞れる
+      (`corpora=drive&driveId=...`、配下フォルダも再帰的に対象)。ID は
+      `bin/list-drives.mjs` (`drives.list`) で確認。未設定時は従来どおり `allDrives`。
+      `DRIVE_FOLDER_IDS` は `in parents` なので直下のみ (再帰しない) 点に注意。
+- [x] **追補**: `bin/drive-fetch.mjs` — Drive の資料をローカルに落として Read で読む
+      (Docs→text / Sheets→CSV / Slides→PDF / それ以外は alt=media でそのまま)。
+      `getFileText` が PDF・Office を扱えない穴を埋めるためのもの。
 - [x] `lib/search.mjs` の `AVAILABLE_SOURCES` は `calendar,slack,discord,github,drive` に。
 - [x] **追補 (feat/github-discussions)**: Discussions を GraphQL (`search(type: DISCUSSION)`) で対応し、
       「未対応」警告を削除。あわせて code ヒットの author / timestamp を最新コミットから補う
@@ -199,7 +206,36 @@ Docker / リモート前提で `.env` 一元管理と噛み合わず、Drive は
 ## 未決事項
 
 - ~~Drive / GitHub は公式 MCP を使う想定~~ → Phase 4 で自前実装に決定(上記)。
-- Drive を実際に使うには `node scripts/bin/auth-google.mjs` の再実行(スコープ追加)が要る。
+- **Google 公式 MCP について (2026-08-30 判断)**: Google が Workspace のリモート MCP を
+  Developer Preview で公開している(Drive `drivemcp.googleapis.com` / Calendar
+  `calendarmcp.googleapis.com` など)。検討したうえで**現時点では導入しない**:
+  - 深掘りは読み取り専用の `bin/drive-fetch.mjs` で足りており、今すぐ入れる理由が無い。
+    (公式 Drive MCP のツールは 8 種 — `search_files` / `read_file_content` /
+    `download_file_content` / `get_file_metadata` / `get_file_permissions` /
+    `list_recent_files` / `copy_file` / `create_file`。要求スコープは `drive.readonly` と
+    `drive.file` で、フル書き込みの `.../auth/drive` は要求されない。`drive.file` は
+    アプリが作成した / ユーザーが明示的に選んだファイルに限定される per-file スコープなので、
+    **既存の研究室資料を書き換え・削除する経路は無い**。当初「書き込みツールが付いてくる」と
+    書いたのは Anthropic の Drive コネクタ (11 種・`update_file` / `trash_file` / `share_file`
+    を含む) と取り違えたもの。両者は別物。)
+  - 横断検索 (`search.mjs` / `experts.mjs`) はヒットをプログラム的に畳み込むので、
+    モデル越しの MCP ツールでは代替できない。`mcp-server/`(ChatGPT パス)と
+    Discord Bot (`allowedTools: Bash/Read/Skill` + bypassPermissions) も同様。
+  - `seminar-calendar` がゼミカレンダー固定なのは安全機構。公式 Calendar MCP は
+    全カレンダーに届き `delete_event` を持つため、Bot パスとは相性が悪い。
+  - Developer Preview で、Claude から使うには有料プランが要る。
+  - 将来 `get_file_permissions` (共有範囲の確認) や Docs/Sheets の構造的な読み取りが
+    欲しくなったら「索引 = 自前 / 深掘り = 公式 MCP」の併用で入れる。検証順は
+    ① `drive.readonly` のみで繋がるか試す → ② 駄目なら `drive.file` を足す。
+    per-tool のスコープ要件は Google が文書化していないので実測が要る。
+- ~~Drive を実際に使うには `auth-google.mjs` の再実行が要る~~ → 2026-08-30 に解決。
+  ハマりどころが 2 つあった: ① 表示された `GOOGLE_REFRESH_TOKEN` の `.env` への貼り忘れ
+  (`--write` で自動更新できるようにした + 許可されたスコープを表示するようにした)、
+  ② Cloud プロジェクトで Drive API が未有効 (有効化後、反映まで約 3 分かかった)。
+  検証: 共有ドライブ `vdslab` (`0ALCFkqfhR-hGUk9PVA`) を `DRIVE_ID` に設定し、
+  "可視化" で 5 件ヒット。`drive-fetch.mjs` で Google スライド → PDF 変換 → Read での
+  読み取りまで通ることを確認。`.pptx` はダウンロードできるが Read では読めない
+  (出力にその旨を添える)。
 - GitHub は `.env` に `GITHUB_TOKEN` / `GITHUB_ORGS=vdslab` を入れると有効になる。
   必要な権限は `docs/GITHUB-TOKEN.md` にまとめた(classic PAT + `repo` を推奨。
   Search 系エンドポイントに必要な fine-grained 権限は GitHub が明記していないため)。

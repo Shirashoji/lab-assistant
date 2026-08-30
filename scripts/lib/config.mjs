@@ -59,6 +59,14 @@ export function requireEnv(key) {
   return v;
 }
 
+/** "a, b ,c" → ["a","b","c"] (空要素除去)。未設定は [] */
+function list(key) {
+  return (env(key, "") || "")
+    .split(/[,\s]+/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
 export const config = {
   get discordToken() {
     return env("DISCORD_BOT_TOKEN");
@@ -86,6 +94,21 @@ export const config = {
   },
   get oauthRedirectPort() {
     return Number(env("OAUTH_REDIRECT_PORT", "4779"));
+  },
+
+  // ── 横断検索 (Phase 1) ───────────────────────────────────
+  /** Discord 横断検索の対象ギルド ID。未設定なら Bot が参加する全ギルドを対象にする。 */
+  get discordGuildIds() {
+    return list("DISCORD_GUILD_IDS");
+  },
+  /** 検索対象チャンネルを絞る場合の許可リスト (省略時は対象ギルドの全テキストチャンネル)。 */
+  get discordSearchChannelIds() {
+    return list("DISCORD_SEARCH_CHANNEL_IDS");
+  },
+  /** 1 チャンネルあたり遡って取得するページ数 (100 件/ページ)。 */
+  get searchMaxPagesPerChannel() {
+    const n = Number(env("SEARCH_MAX_PAGES_PER_CHANNEL", "3"));
+    return Number.isFinite(n) && n > 0 ? Math.min(n, 20) : 3;
   },
 };
 

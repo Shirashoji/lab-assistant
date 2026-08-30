@@ -84,6 +84,52 @@ export async function listEvents({ timeMin, timeMax, q, calendarId }) {
   return json.items || [];
 }
 
+// ── 横断検索 (Phase 1) ─────────────────────────────────────
+
+function eventToHit(ev, calendarId) {
+  const start = ev.start?.dateTime || ev.start?.date || null;
+  return {
+    source: "calendar",
+    title: ev.summary || "(無題の予定)",
+    url: ev.htmlLink || null,
+    snippet: [ev.location ? `📍 ${ev.location}` : "", (ev.description || "").trim()]
+      .filter(Boolean)
+      .join(" — ")
+      .slice(0, 200),
+    author: ev.organizer?.displayName || ev.organizer?.email || null,
+    timestamp: start,
+    extra: {
+      id: ev.id,
+      calendarId: calendarId || config.calendarId,
+      start: ev.start,
+      end: ev.end,
+      allDay: !!ev.start?.date,
+      status: ev.status,
+      location: ev.location || null,
+      recurringEventId: ev.recurringEventId || null,
+    },
+  };
+}
+
+/**
+ * Google Calendar をキーワード + 期間で検索する。
+ * 既定の期間は「30 日前 〜 400 日後」。予定は開始時刻の昇順。
+ * @param {{q?:string, since?:string, until?:string, calendarId?:string}} opts
+ * @returns {Promise<{hits:object[], warnings:string[]}>}
+ */
+export async function searchEvents(opts = {}) {
+  const now = Date.now();
+  const timeMin = opts.since
+    ? new Date(opts.since).toISOString()
+    : new Date(now - 30 * 864e5).toISOString();
+  const timeMax = opts.until
+    ? new Date(opts.until).toISOString()
+    : new Date(now + 400 * 864e5).toISOString();
+  const calendarId = opts.calendarId || config.calendarId;
+  const events = await listEvents({ timeMin, timeMax, q: opts.q || undefined, calendarId });
+  return { hits: events.map((e) => eventToHit(e, calendarId)), warnings: [] };
+}
+
 /**
  * @param {object} eventBody Google Calendar Event resource
  * @param {string} [calendarId]

@@ -11,7 +11,7 @@
 | 機能 | 状態 |
 | --- | --- |
 | `add-event` — URL(Discord / esa)から予定を抽出 → 重複チェック → カレンダー作成 | ✅ 動作 |
-| 横断検索(Discord / esa / Calendar) | 🚧 Phase 1 |
+| 横断検索(Calendar / esa / Discord) — `scripts/bin/search.mjs` | ✅ 動作(Phase 1) |
 | Slack 連携 | 🚧 Phase 2 |
 | `find-schedule` / `check-shared` / `find-channel` / `search-lab` スキル | 🚧 Phase 3(下書きが `skills/` にあります) |
 | Google Drive / GitHub | 🚧 Phase 4 |
@@ -99,18 +99,49 @@ node scripts/bin/check-setup.mjs
 3. その ID を `.env` の `GOOGLE_CALENDAR_ID` に設定
 4. `node scripts/bin/check-setup.mjs` で「対象カレンダー: <名前>(… / 権限: owner|writer)」を確認
 
+## 横断検索(`scripts/bin/search.mjs`)
+
+Calendar / esa / Discord をまたいでキーワード検索し、共通形式(`source` / `title` / `url` /
+`snippet` / `author` / `timestamp`)の JSON を返します。
+
+```bash
+node scripts/bin/search.mjs "中間報告会"
+node scripts/bin/search.mjs "可視化 D3" --source esa,discord --since 2026-04-01 --limit 30
+node scripts/bin/search.mjs "ゼミ リスケ" --source discord --channels 123,456
+node scripts/bin/search.mjs "発表会" --text            # 人間向けの整形出力
+```
+
+| オプション | 説明 |
+| --- | --- |
+| `--source a,b` | 検索対象。既定は `calendar,esa,discord`。未実装: `slack` / `drive` / `github` |
+| `--since` / `--until` | 期間(`YYYY-MM-DD` か ISO8601) |
+| `--sort` | `relevance`(既定・今日からの近さ順)/ `newest` / `oldest` |
+| `--limit N` | 最大件数(既定 40) |
+| `--channels id,id` | Discord の対象チャンネルを ID で限定 |
+| `--max-channels N` | Discord で自動選択するチャンネル数の上限(既定 80) |
+| `--text` | JSON でなく整形テキストで出力 |
+
+- **esa 検索には `.env` の `ESA_DEFAULT_TEAM` が必須**です。
+- **Discord** はメッセージ検索 API が Bot では使えないため、対象チャンネルの直近メッセージを
+  取得してクライアント側でフィルタします。期間未指定なら各チャンネル直近 100 件のみ。
+  `--since` を付けると遡ります。Bot が参加していないチャンネル/閲覧権限の無いチャンネルは
+  対象外です(結果の `warnings` に件数が出ます)。学科の重要チャンネル(週報・ゼミアナウンス等)を
+  検索したい場合は、その Bot ロールに「チャンネルを見る」「メッセージ履歴を読む」を付与してください。
+- 対象ギルドは `.env` の `DISCORD_GUILD_IDS`(未設定なら Bot の全参加サーバー)。
+
 ## スクリプト(`scripts/`)
 
 | スクリプト | 用途 |
 | --- | --- |
+| `bin/search.mjs "<query>" [opts]` | Calendar / esa / Discord の横断検索(上記) |
 | `bin/collect-context.mjs <url...>` | URL 群から予定抽出用の文脈を JSON 出力 |
 | `bin/find-duplicate.mjs --summary S --start ISO` | 重複候補イベントを JSON 出力 |
 | `bin/create-event.mjs`(stdin JSON) | 予定を作成 |
 | `bin/auth-google.mjs` | Google リフレッシュトークン取得(初回のみ) |
 | `bin/list-calendars.mjs [--json]` | アクセスできるカレンダーと ID・権限を一覧 |
-| `bin/check-setup.mjs [--quiet]` | 設定と API 疎通の確認 |
+| `bin/check-setup.mjs [--quiet]` | 設定と API 疎通の確認(横断検索の準備状況も表示) |
 
-実体は `scripts/lib/`(`collect` / `dedupe` / `discord` / `esa` / `gcal` / `url` / `config`)。
+実体は `scripts/lib/`(`search` / `collect` / `dedupe` / `discord` / `esa` / `gcal` / `url` / `text` / `config`)。
 `bin/` は薄いラッパー。同じ `lib/` を `bot/`(任意の Discord Bot)と `mcp-server/`(任意の MCP サーバー)も共有します。
 
 ## 追加コンポーネント

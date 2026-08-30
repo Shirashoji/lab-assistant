@@ -15,7 +15,7 @@
 | 横断検索(Calendar / Slack / Discord / GitHub / Drive) — `scripts/bin/search.mjs` | ✅ 動作 |
 | スキル `find-schedule` / `check-shared` / `find-channel` / `search-lab` | ✅ 動作 |
 | スキル `find-expert` — トピックに詳しい人を根拠付きで探す — `scripts/bin/find-expert.mjs` | ✅ 動作 |
-| GitHub 検索(Issue / PR / コード / コミット) | ✅ 動作(`GITHUB_TOKEN` が必要) |
+| GitHub 検索(Issue / PR / コード / コミット / Discussions) | ✅ 動作(`GITHUB_TOKEN` が必要) |
 | Google Drive 検索(全文) | ⚠ `auth-google.mjs` の再実行が必要(`drive.readonly` スコープ追加) |
 | Claude Desktop 対応 — `search_lab` / `find_expert` を MCP ツールとして公開 | ✅ 動作 |
 
@@ -168,12 +168,14 @@ node scripts/bin/search.mjs "可視化 D3" --since 2026-04-01 --limit 30
 node scripts/bin/search.mjs "ゼミ リスケ" --source discord --channels 123,456
 node scripts/bin/search.mjs "可視化" --source github --kinds issues,code --text
 node scripts/bin/search.mjs "研究会 スライド" --source drive --limit 10
+node scripts/bin/search.mjs "レイアウト" --source github --kinds discussions --text
 ```
 
 | オプション | 説明 |
 | --- | --- |
 | `--source a,b` | 検索対象。既定は設定済みの全ソース(`calendar,slack,discord,github,drive`) |
-| `--kinds a,b` | GitHub の検索種別。`issues`(既定)/ `code` / `commits` / `repos` |
+| `--kinds a,b` | GitHub の検索種別。`issues`(既定)/ `code` / `commits` / `repos` / `discussions` |
+| `--enrich-code` | GitHub の code ヒットに著者と日付を補う(先頭 10 件・1 件につき 1 リクエスト増) |
 | `--since` / `--until` | 期間(`YYYY-MM-DD` か ISO8601) |
 | `--sort` | `relevance`(既定・今日からの近さ順)/ `newest` / `oldest` |
 | `--limit N` | 最大件数(既定 40) |
@@ -210,6 +212,7 @@ cat esa-hits.json | node scripts/bin/find-expert.mjs "根付き木" --extra-hits
 | `--extra-hits <path\|->` | esa など MCP 側の結果を共通ヒット形の JSON で混ぜる |
 | `--alias "a=b,c=b"` | 表記ゆれの名寄せ |
 | `--include-bots` | GitHub 連携などの Bot 投稿も含める(既定は除外) |
+| `--no-enrich-code` | GitHub の code ヒットの著者補完を止める(既定は有効) |
 | `--half-life N` | 鮮度の半減期(日、既定 365) |
 | `--min-hits N` | 根拠がこの件数未満の人を落とす |
 

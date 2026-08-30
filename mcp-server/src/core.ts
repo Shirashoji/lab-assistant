@@ -90,6 +90,8 @@ type SearchOpts = {
   sort?: "relevance" | "newest" | "oldest";
   channels?: string[];
   calendarId?: string;
+  kinds?: string[];
+  enrichCode?: boolean;
 };
 
 type ExpertResult = {
@@ -156,8 +158,14 @@ export const core = {
       includeBots?: boolean;
     } = {}
   ): Promise<ExpertResult & Pick<SearchResult, "window" | "searched" | "skipped" | "coverage" | "warnings">> {
-    // 人物ごとに畳み込むので、検索そのものは広めに取る
-    const result = await searchAllTyped(query, { ...opts, limit: opts.limit ?? 120, sort: "newest" });
+    // 人物ごとに畳み込むので、検索そのものは広めに取る。
+    // 誰が書いたかが主題なので、code ヒットの著者補完も既定で有効にする。
+    const result = await searchAllTyped(query, {
+      ...opts,
+      limit: opts.limit ?? 120,
+      sort: "newest",
+      enrichCode: opts.enrichCode ?? true,
+    });
     const hits = [...result.hits, ...(opts.extraHits || [])];
     await resolveSlackAuthors(hits);
 

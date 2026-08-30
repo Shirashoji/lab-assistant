@@ -165,6 +165,13 @@ Docker / リモート前提で `.env` 一元管理と噛み合わず、Drive は
       (`corpora=allDrives`)。**`auth-google.mjs` に `drive.readonly` を追加したので
       リフレッシュトークンの取り直しが必要**。未許可時はその旨を日本語で案内する。
 - [x] `lib/search.mjs` の `AVAILABLE_SOURCES` は `calendar,slack,discord,github,drive` に。
+- [x] **追補 (feat/github-discussions)**: Discussions を GraphQL (`search(type: DISCUSSION)`) で対応し、
+      「未対応」警告を削除。あわせて code ヒットの author / timestamp を最新コミットから補う
+      `enrichCode` を追加 (先頭 10 件のみ・repo+path でメモ化)。find-expert では既定で有効
+      (`--no-enrich-code` で無効化)。code のヒットが「誰が詳しいか」の根拠として使えるようになった。
+      検証: vercel/next.js の "app router" で Discussions 3523 件中 3 件、
+      vdslab の "d3" code 4 件すべてに著者と日付が入ることを確認。
+      (vdslab org は Discussions 未使用のため 0 件になるのが正常)
 - 検証: GitHub は `GITHUB_ORGS=vdslab` で "可視化" → theme2026-kaziru の PR/Issue が取れた。
   Drive はスコープ未許可の状態で再認証案内が出ることまで確認 (実データ検索は再認証後)。
 

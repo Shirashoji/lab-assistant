@@ -118,10 +118,20 @@ export function makeServer(): McpServer {
           .optional()
           .describe("並び順。relevance (既定) は今日からの時間的な近さ順"),
         channels: z.string().array().optional().describe("Slack / Discord のチャンネル ID で絞る"),
+        kinds: z
+          .array(z.enum(["issues", "code", "commits", "repos", "discussions"]))
+          .optional()
+          .describe("GitHub の検索種別。既定は issues と code"),
+        enrichCode: z
+          .boolean()
+          .optional()
+          .describe(
+            "GitHub の code ヒットに著者と日付を補う (先頭 10 件、1 件につき 1 リクエスト増える)"
+          ),
       },
       annotations: { readOnlyHint: true, openWorldHint: true },
     },
-    async ({ query, sources, since, until, limit, sort, channels }) => {
+    async ({ query, sources, since, until, limit, sort, channels, kinds, enrichCode }) => {
       const result = await core.searchLab(query, {
         sources,
         since,
@@ -129,6 +139,8 @@ export function makeServer(): McpServer {
         limit: limit ?? 40,
         sort,
         channels,
+        kinds,
+        enrichCode,
       });
       return json(result);
     }

@@ -1,0 +1,107 @@
+#!/usr/bin/env node
+// 使い方: node check-setup.mjs [--quiet]
+// .env の設定と各 API の疎通を確認する。--quiet は問題があるときだけ 1 行出力 (SessionStart フック用)。
+import { config, PLUGIN_ROOT } from "../lib/config.mjs";
+import { getUser as esaUser } from "../lib/esa.mjs";
+import { listCalendars } from "../lib/gcal.mjs";
+
+const quiet = process.argv.includes("--quiet");
+const results = [];
+
+function record(name, ok, detail) {
+  results.push({ name, ok, detail });
+}
+
+async function checkDiscord() {
+  if (!config.discordToken) return record("Discord トークン", false, "DISCORD_BOT_TOKEN 未設定");
+  try {
+    const res = await fetch("https://discord.com/api/v10/users/@me", {
+      headers: { Authorization: `Bot ${config.discordToken}` },
+    });
+    if (!res.ok) return record("Discord 接続", false, `HTTP ${res.status}`);
+    const me = await res.json();
+    record("Discord 接続", true, `Bot: ${me.username}#${me.discriminator ?? ""}`);
+  } catch (e) {
+    record("Discord 接続", false, e.message);
+  }
+}
+
+async function checkEsa() {
+  if (!config.esaToken) return record("esa トークン", false, "ESA_ACCESS_TOKEN 未設定");
+  try {
+    const me = await esaUser();
+    record("esa 接続", true, `User: ${me.screen_name || me.name}`);
+  } catch (e) {
+    record("esa 接続", false, e.message);
+  }
+}
+
+async function checkGoogle() {
+  if (!config.googleClientId || !config.googleClientSecret) {
+    return record("Google クライアント", false, "GOOGLE_CLIENT_ID/SECRET 未設定");
+  }
+  if (!config.googleRefreshToken) {
+    return record(
+      "Google リフレッシュトークン",
+      false,
+      "GOOGLE_REFRESH_TOKEN 未設定 (node scripts/bin/auth-google.mjs)"
+    );
+  }
+  try {
+    const list = await listCalendars();
+    const items = list.items || [];
+    const target =
+      config.calendarId === "primary"
+        ? items.find((c) => c.primary) || null
+        : items.find((c) => c.id === config.calendarId) || null;
+
+    if (!target) {
+      const label =
+        config.calendarId === "primary"
+          ? "primary"
+          : `${config.calendarId}`;
+      record(
+        "Google Calendar 接続",
+        false,
+        `対象カレンダー ${label} が一覧にありません。ID の確認、または OAuth に使った Google アカウントへの共有（予定の変更権限）が必要です。'node scripts/bin/list-calendars.mjs' で確認できます。`
+      );
+      return;
+    }
+
+    const writable = target.accessRole === "owner" || target.accessRole === "writer";
+    record(
+      "Google Calendar 接続",
+      writable,
+      `対象カレンダー: ${target.summary}（${target.id} / 権限: ${target.accessRole}）` +
+        (writable ? "" : " ← 予定を作成できません。共有設定で「予定の変更」権限を付与してください")
+    );
+  } catch (e) {
+    record("Google Calendar 接続", false, e.message);
+  }
+}
+
+await Promise.all([checkDiscord(), checkEsa(), checkGoogle()]);
+
+const failed = results.filter((r) => !r.ok);
+
+if (quiet) {
+  if (failed.length) {
+    process.stderr.write(
+      `[calendar-agent] 設定未完了: ${failed
+        .map((f) => f.name)
+        .join(", ")} — ${PLUGIN_ROOT}/.env を確認 (.env.example 参照)\n`
+    );
+  }
+  process.exit(0);
+}
+
+process.stdout.write(`calendar-agent セットアップ確認 (${PLUGIN_ROOT}/.env)\n\n`);
+for (const r of results) {
+  process.stdout.write(`  ${r.ok ? "✅" : "❌"} ${r.name}${r.detail ? ` — ${r.detail}` : ""}\n`);
+}
+process.stdout.write(
+  failed.length
+    ? `\n${failed.length} 件の問題があります。README.md のセットアップ手順を参照してください。\n`
+    : `\nすべて OK です。\n`
+);
+process.exit(failed.length ? 1 : 0);

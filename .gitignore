@@ -1,0 +1,11 @@
+# secrets
+.env
+*.local
+
+# node
+node_modules/
+bot/dist/
+mcp-server/dist/
+
+# os
+.DS_Store

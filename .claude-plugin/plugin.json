@@ -1,0 +1,8 @@
+{
+  "name": "calendar-agent",
+  "displayName": "Discord / esa → Google Calendar",
+  "version": "0.1.0",
+  "description": "Discord メッセージや esa 記事の URL から Google Calendar の予定を作成(返信/スレッド/分割メッセージ/esa リンク対応、重複チェック付き)",
+  "author": { "name": "takuma" },
+  "keywords": ["discord", "esa", "google-calendar", "calendar", "automation"]
+}

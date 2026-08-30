@@ -1,0 +1,26 @@
+{
+  "name": "calendar-agent-mcp",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "calendar-agent のロジックを MCP ツールとして公開する (ChatGPT / Codex / Claude Desktop など向け)",
+  "scripts": {
+    "build": "tsc",
+    "start:stdio": "node dist/stdio.js",
+    "start:http": "node dist/http.js",
+    "dev:stdio": "tsx src/stdio.ts",
+    "dev:http": "tsx watch src/http.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.30.0",
+    "express": "^5.1.0",
+    "zod": "^3.25.0"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.0",
+    "@types/node": "^22.0.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.6.0"
+  }
+}

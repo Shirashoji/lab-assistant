@@ -331,7 +331,7 @@ node scripts/install.mjs status            # 導入状況
 - コピーには **`.env` も含まれます**。`uninstall codex` はこのキャッシュごと削除します。
 - 検索スクリプトは外部 API を叩くので、codex 実行時は
   `-c 'sandbox_workspace_write.network_access=true'` が必要です(既定のサンドボックスは通信を遮断)。
-- マーケットプレイス定義は親ディレクトリ側(`Agent-Plugins/.agents/plugins/marketplace.json`)と
+- マーケットプレイス定義は親ディレクトリ側(`<親ディレクトリ>/.agents/plugins/marketplace.json`)と
   `~/.agents/plugins/` に生成されます。どちらもインストーラが管理します。
 
 ### Claude Desktop

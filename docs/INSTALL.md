@@ -41,11 +41,11 @@
 
 ## 2. 取得する
 
-プラグイン本体はリポジトリですが、**マーケットプレイス定義は親ディレクトリ**に置く構成です。
-親ディレクトリの名前は何でも構いません(ここでは `Agent-Plugins`)。
+プラグイン本体はリポジトリですが、**マーケットプレイス定義は 1 つ上の階層**に置く構成です。
+そのため「プラグインを入れる箱」になる親ディレクトリを作り、その中に clone します。
 
 ```bash
-mkdir -p ~/develop/Agent-Plugins && cd ~/develop/Agent-Plugins
+mkdir -p ~/develop/AI-Plugins && cd ~/develop/AI-Plugins
 git clone https://github.com/Shirashoji/lab-assistant.git
 cd lab-assistant
 ```
@@ -54,11 +54,34 @@ cd lab-assistant
 **インストーラが自動生成する**ので、手で作る必要はありません。
 
 ```
-Agent-Plugins/            ← マーケットプレイスの root (git 管理外)
-├── .claude-plugin/       ← 自動生成
-├── .agents/              ← 自動生成
-└── lab-assistant/        ← clone したリポジトリ
+AI-Plugins/               ← マーケットプレイスの root (git 管理外・名前は任意)
+├── .claude-plugin/       ← 自動生成 (Claude 用の定義)
+├── .agents/              ← 自動生成 (ChatGPT / Codex 用の定義)
+└── lab-assistant/        ← clone したリポジトリ (= プラグイン本体)
 ```
+
+> **親ディレクトリの名前は何でも構いません。** インストーラは「リポジトリの 1 つ上」を
+> 自動で root とみなすので、名前に依存しません。複数のプラグインを並べたい場合は、
+> 同じ階層に clone すれば同じマーケットプレイスに載ります。
+>
+> ただし `.agents` という名前は避けてください。ホームにある個人マーケットプレイス
+> (`~/.agents/plugins/`) と紛らわしくなります。両者は別物です:
+>
+> | パス | 役割 |
+> | --- | --- |
+> | `<親ディレクトリ>/.agents/plugins/marketplace.json` | リポジトリ側の定義。`codex` ターゲットが使う |
+> | `~/.agents/plugins/marketplace.json` | ホームの個人マーケットプレイス。`chatgpt-desktop` ターゲットが使う |
+
+### 導入後にディレクトリを移動・改名したら
+
+登録には**絶対パス**が記録されるため、移動・改名したら入れ直しが必要です。
+
+```bash
+node scripts/install.mjs install <target>   # 新しいパスで登録し直す
+```
+
+Claude Desktop / Codex の「信頼済みフォルダ」は古いパスのまま残りますが、
+新しいパスで改めて信頼を確認されるだけなので、そのままで問題ありません。
 
 ---
 

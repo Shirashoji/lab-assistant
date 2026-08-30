@@ -203,7 +203,7 @@ Docker / リモート前提で `.env` 一元管理と噛み合わず、Drive は
 - [x] `install.mjs claude-desktop` がバンドル MCP も登録するように
       (`lab-assistant-esa` / `lab-assistant-seminar-calendar`)。
       `esa-mcp.mjs` は GUI アプリ起動時に PATH が無くても npx を解決できるようにした。
-- [ ] `Agent-Plugins` マーケットプレイスに `lab-assistant` を登録
+- [ ] マーケットプレイス `vdslab-agent-plugins` に `lab-assistant` を登録
 - [ ] `install.mjs` を汎用化
 
 ## 未決事項

@@ -36,13 +36,14 @@ import { randomBytes } from "node:crypto";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PLUGIN_ROOT = resolve(__dirname, ".."); // lab-assistant/
-const MARKETPLACE_ROOT = resolve(PLUGIN_ROOT, ".."); // Agent-Plugins/
+const MARKETPLACE_ROOT = resolve(PLUGIN_ROOT, ".."); // プラグインの親 = マーケットプレイス root
 const MCP_DIR = join(PLUGIN_ROOT, "mcp-server");
 const MCP_STDIO_JS = join(MCP_DIR, "dist", "stdio.js");
 const MCP_ENV = join(MCP_DIR, ".env");
 const PLUGIN_ENV = join(PLUGIN_ROOT, ".env");
 // マーケットプレイス定義。Claude と OpenAI で置き場所が違うが、どちらも
-// Agent-Plugins/ (= MARKETPLACE_ROOT) を root として ./lab-assistant を指す。
+// 親ディレクトリ (= MARKETPLACE_ROOT) を root として ./lab-assistant を指す。
+// 親ディレクトリの名前は任意 (ユーザーが自由に付けられる) なので、コードは名前に依存しない。
 const CLAUDE_MARKETPLACE = join(MARKETPLACE_ROOT, ".claude-plugin", "marketplace.json");
 const OPENAI_MARKETPLACE = join(MARKETPLACE_ROOT, ".agents", "plugins", "marketplace.json");
 // ChatGPT デスクトップが読む個人マーケットプレイス。相対パスしか書けない仕様なので
@@ -273,7 +274,7 @@ function uninstallClaudeDesktop() {
 
 // ── claude-code ────────────────────────────────────────────
 /**
- * Claude 用のマーケットプレイス定義 (Agent-Plugins/.claude-plugin/marketplace.json)。
+ * Claude 用のマーケットプレイス定義 (<親ディレクトリ>/.claude-plugin/marketplace.json)。
  * このファイルはプラグインリポジトリの **外** (親ディレクトリ) にあり git 管理されていないので、
  * 新しく clone した人の環境には存在しない。無ければ作る。
  * 既に他のプラグイン (calendar-agent など) が並んでいたら壊さずに残す。
@@ -368,7 +369,7 @@ function ensureOpenAiMarketplace() {
     plugins: [
       {
         name: PLUGIN_NAME,
-        // root は Agent-Plugins/ なので、その直下の lab-assistant/ を指す
+        // root は親ディレクトリなので、その直下の lab-assistant/ を指す
         source: { source: "local", path: `./${PLUGIN_NAME}` },
         policy: { installation: "AVAILABLE", authentication: "ON_USE" },
         category: "Productivity",

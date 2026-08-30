@@ -337,8 +337,8 @@ function ensureOpenAiMarketplace() {
     plugins: [
       {
         name: PLUGIN_NAME,
-        // ホームからの相対パス (root = ~)。上のコメント参照。
-        source: { source: "local", path: `./${relative(homedir(), link)}` },
+        // root は Agent-Plugins/ なので、その直下の lab-assistant/ を指す
+        source: { source: "local", path: `./${PLUGIN_NAME}` },
         policy: { installation: "AVAILABLE", authentication: "ON_USE" },
         category: "Productivity",
       },

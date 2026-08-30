@@ -77,6 +77,10 @@ export const config = {
   get esaDefaultTeam() {
     return env("ESA_DEFAULT_TEAM");
   },
+  /** 自前アプリ lab-assistant-search の User OAuth Token (xoxp-)。search.messages 用。 */
+  get slackUserToken() {
+    return env("SLACK_USER_TOKEN");
+  },
   get googleClientId() {
     return env("GOOGLE_CLIENT_ID");
   },

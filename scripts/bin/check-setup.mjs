@@ -37,6 +37,21 @@ async function checkEsa() {
   }
 }
 
+async function checkSlack() {
+  // Slack は任意機能。未設定なら合否に含めず、下の「横断検索」欄にだけ出す。
+  if (!config.slackUserToken) return;
+  try {
+    const res = await fetch("https://slack.com/api/auth.test", {
+      headers: { Authorization: `Bearer ${config.slackUserToken}` },
+    });
+    const j = await res.json();
+    if (!j.ok) return record("Slack 接続", false, j.error || `HTTP ${res.status}`);
+    record("Slack 接続", true, `User: ${j.user} / Team: ${j.team}`);
+  } catch (e) {
+    record("Slack 接続", false, e.message);
+  }
+}
+
 async function checkGoogle() {
   if (!config.googleClientId || !config.googleClientSecret) {
     return record("Google クライアント", false, "GOOGLE_CLIENT_ID/SECRET 未設定");
@@ -81,7 +96,7 @@ async function checkGoogle() {
   }
 }
 
-await Promise.all([checkDiscord(), checkEsa(), checkGoogle()]);
+await Promise.all([checkDiscord(), checkEsa(), checkSlack(), checkGoogle()]);
 
 const failed = results.filter((r) => !r.ok);
 
@@ -103,7 +118,7 @@ for (const r of results) {
 
 // 横断検索の準備状況 (任意機能なので合否には含めない)
 const readiness = sourceReadiness();
-process.stdout.write(`\n横断検索 (node scripts/bin/search.mjs — Calendar / Discord):\n`);
+process.stdout.write(`\n横断検索 (node scripts/bin/search.mjs — Calendar / Slack / Discord):\n`);
 for (const [src, s] of Object.entries(readiness)) {
   const mark = s.ready ? "✅" : "—";
   process.stdout.write(`  ${mark} ${src}${s.ready ? "" : ` — ${s.reason}`}\n`);

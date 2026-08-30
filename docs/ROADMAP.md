@@ -113,13 +113,18 @@ esa にあるのか分からなくても、横断的に探して答える。イ�
 - [x] README にバンドル MCP と Slack の説明を追加
 - 検証: MCP wrapper 経由で `initialize` / `tools/list` / `esa_search_posts` が動作(esa-mcp-server v0.14.0)
 
-### Phase 2 — Slack 連携(管理者承認が要る)
-- [ ] 学科 Slack 管理者に「Claude / Claude Code コネクタの承認」を打診
-- [ ] 承認 OK → `.mcp.json` に `slack`(`type: sse`, `url: https://mcp.slack.com/sse`)を追加
-- [ ] 承認 NG → 自前アプリ + ユーザートークン方式: `scripts/lib/slack.mjs`(`search.messages`) +
-      `bin/search.mjs` に `slack` ソースを復活、`.env` に `SLACK_USER_TOKEN`
-- [ ] どちらも不可 → 自前ボット + `conversations.history`(Bot を対象チャンネルに招待)
-- 参考スコープ(自前アプリ): user `search:read` / `users:read` / `channels:read`
+### Phase 2 — Slack 連携 ✅ (feat/slack-search)
+- 判断: 公式 MCP はワークスペース管理者の承認が必要 → **自前アプリ + ユーザートークン方式**を採用
+- [x] `slack-app/` — `search:read` だけの最小アプリ(manifest + Slack CLI フック)。
+      `slack app install` で学科ワークスペースにインストール(**管理者承認は不要だった**)
+- [x] `scripts/lib/slack.mjs` — `search.messages`(ユーザートークン)→ 共通ヒット形
+- [x] `scripts/lib/config.mjs` — `slackUserToken` / `.env` の `SLACK_USER_TOKEN`
+- [x] `lib/search.mjs` / `bin/search.mjs` に `slack` ソースを追加(既定ソースに含む)
+- [x] `check-setup.mjs` に Slack 疎通チェック(任意機能なので合否には含めない)
+- 検証: 実データで「M2 中間報告会」→ #2025-大学院 の M2 中間発表会アナウンス(9/11-12)がヒット
+- 制約: 検索範囲はトークン所有者が見えるチャンネルのみ。全文インデックスは Slack 側にあるので Discord より高速。
+- 補足: 公式 Slack MCP に移行したくなったら `.mcp.json` に `slack`(`type: sse`, `https://mcp.slack.com/sse`)を
+  足して `lib/slack.mjs` を落とすだけ。ただしそのときは管理者承認が必要。
 
 ### Phase 3 — スキル
 - [ ] `skills/find-schedule/`
@@ -140,8 +145,8 @@ esa にあるのか分からなくても、横断的に探して答える。イ�
 ## 未決事項
 
 - Drive / GitHub は公式 MCP を使う想定(esa と同じくバンドル + 起動ラッパ)。
-- Slack は学科ワークスペースの管理者承認が必要。公式 MCP 承認を打診中。
-  「AI agent」テンプレートは不可、「Starter app」は作成可だった(2026-08-30 ユーザー報告)。
-  Slack CLI も導入済みで検証に使える。
+- Slack: 自前アプリ + ユーザートークン方式で実装済み(管理者承認は不要だった / 2026-08-30)。
+  トークン失効時は slack-app を再インストールして `SLACK_USER_TOKEN` を差し替える。
+  重複アプリ `A0BTQ73GE57`(`--environment local` で試した残骸)は `slack app delete` で掃除可。
 - `search-vdslab/`(先行の叩き台、未検証)は参照用に残置。使える部分があれば取り込む。
 - `mcp-server/`(ChatGPT/Codex 向け)は esa/Slack MCP をカバーしない。ChatGPT パスの扱いは Phase 5 で再検討。

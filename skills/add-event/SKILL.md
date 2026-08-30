@@ -79,8 +79,10 @@ echo '{"summary":"...","start":"2026-09-01T19:00:00+09:00","end":"2026-09-01T20:
   | node "${CLAUDE_PLUGIN_ROOT}/scripts/bin/create-event.mjs"
 ```
 
-  作成先は既定で `GOOGLE_CALENDAR_ID`（未設定なら primary）。ユーザーが「〜のカレンダーに」と
-  指定した場合のみ `--calendar "<id>"` を付ける（`find-duplicate.mjs` にも同じ `--calendar` を渡す）。
+  作成先は既定で `.env` の `GOOGLE_CALENDAR_ID`（= **ゼミの Google Calendar**）。この経路は
+  プラグイン同梱の自前 OAuth を使うので、**Claude アプリ標準の Google Calendar コネクタ
+  （別カレンダーを指すことがある）は使わない**。ユーザーが「〜のカレンダーに」と別カレンダーを
+  明示した場合のみ `--calendar "<id>"` を付ける（`find-duplicate.mjs` にも同じ `--calendar` を渡す）。
   どのカレンダーがあるか不明なときは `node "${CLAUDE_PLUGIN_ROOT}/scripts/bin/list-calendars.mjs"` で確認。
 
   成功したら:

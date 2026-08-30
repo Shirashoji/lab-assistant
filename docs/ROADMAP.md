@@ -126,12 +126,16 @@ esa にあるのか分からなくても、横断的に探して答える。イ�
 - 補足: 公式 Slack MCP に移行したくなったら `.mcp.json` に `slack`(`type: sse`, `https://mcp.slack.com/sse`)を
   足して `lib/slack.mjs` を落とすだけ。ただしそのときは管理者承認が必要。
 
-### Phase 3 — スキル
-- [ ] `skills/find-schedule/`
-- [ ] `skills/check-shared/`(週報 Visualization 重複チェック含む)
-- [ ] `skills/find-channel/`
-- [ ] `skills/search-lab/`
-- [ ] `add-event` をゼミカレンダー前提に更新
+### Phase 3 — スキル ✅ (feat/phase3-skills)
+- [x] `skills/find-schedule/` — Calendar(ゼミ)→ esa MCP → Slack/Discord の順で照合、
+      未来の予定を出典付きで回答、ゼミカレンダー未登録なら add-event に橋渡し
+- [x] `skills/check-shared/` — esa / Slack / Discord を横断、週報 Visualization の自己重複チェック含む
+- [x] `skills/find-channel/` — 話題 → チャンネル特定(ヒットを channelName で集計)
+- [x] `skills/search-lab/` — 調べもの全般の入口。振り分け + 横断検索 + 出典付き要約
+- [x] `add-event` — 作成先が **ゼミ Google Calendar**(自前 OAuth)であることを明記
+- 各スキル共通: 「見たソース・期間・カバレッジ・スキップを必ず明記」「副作用は事前確認」
+- 検証: find-schedule の各ステップを実データで実行、「M2 中間報告会」で Slack の発表会アナウンス
+      (9/11-12)と esa の先生 MTG 議事録が取れることを確認
 
 ### Phase 4 — Google Drive / GitHub
 - [ ] Drive: 公式 MCP or Drive API での資料検索

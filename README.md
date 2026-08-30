@@ -13,7 +13,7 @@
 | `add-event` — URL(Discord / esa)から予定を抽出 → 重複チェック → カレンダー作成 | ✅ 動作 |
 | esa 検索 — 公式 MCP `@esaio/esa-mcp-server` を `.mcp.json` でバンドル | ✅ 動作 |
 | 横断検索(Calendar / Slack / Discord) — `scripts/bin/search.mjs` | ✅ 動作 |
-| `find-schedule` / `check-shared` / `find-channel` / `search-lab` スキル | 🚧 Phase 3(下書きが `skills/` にあります) |
+| スキル `find-schedule` / `check-shared` / `find-channel` / `search-lab` | ✅ 動作 |
 | Google Drive / GitHub | 🚧 Phase 4 |
 
 ## アーキテクチャ
@@ -28,20 +28,17 @@
     `search.messages` を叩く方式にしている。
 - **スキル**が両者を順に呼び出して結果をまとめる。
 
-## 使い方(現状)
+## 使い方
 
-```
-/lab-assistant:add-event <url> [url ...]
-```
+| スキル | 用途 |
+| --- | --- |
+| `/lab-assistant:find-schedule <イベント>` | 「M2 中間報告会いつ?」— Calendar / esa / Slack / Discord を横断して日程を答え、ゼミカレンダーに無ければ追加を提案 |
+| `/lab-assistant:check-shared <URL または話題>` | 共有・週報ネタが esa / Slack / Discord で既出でないか(自分の過去分含む)を確認 |
+| `/lab-assistant:find-channel <話題>` | その話題を扱っている Discord / Slack チャンネルを特定 |
+| `/lab-assistant:search-lab <調べたいこと>` | 研究室・学科の情報を横断検索して出典付きで要約(調べもの全般の入口) |
+| `/lab-assistant:add-event <url> [url ...]` | Discord / esa の URL から予定を抽出 → 確認 → 重複チェック → ゼミカレンダーに作成 |
 
-例:
-
-```
-/lab-assistant:add-event https://discord.com/channels/123/456/789
-/lab-assistant:add-event https://myteam.esa.io/posts/1234
-```
-
-URL の内容を読み取り、抽出した予定を提示 → 確認 → 重複チェック → 作成します。
+スキルは自然文でも起動します(例:「次のゼミの発表会いつだっけ」)。
 
 ## セットアップ
 
